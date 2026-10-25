@@ -11,6 +11,7 @@ from bracketman.store import (
     merge_brackets,
     move_wrestler,
     regenerate_brackets_by_ids,
+    reoptimize_active_brackets,
     restore_scratched_wrestler,
     scratch_wrestler,
     swap_wrestlers,
@@ -153,4 +154,47 @@ def test_walkin_and_scratch_wrestler(tmp_path: Path):
     restore_scratched_wrestler(t, scratch_index=0, target_group_id="AUTO", base_dir=base_dir)
     assert len(t.scratched_wrestlers) == 0
     assert any(w.id == w_to_scratch.id for w in g2.wrestlers)
+
+
+def test_reoptimize_active_brackets(tmp_path: Path):
+    base_dir = tmp_path / "tournaments"
+    xlsx_path = _create_sample_xlsx(tmp_path / "rosters.xlsx")
+
+    t = create_tournament("Reoptimize Test", base_dir=base_dir)
+    import_spreadsheet_to_tournament(t, xlsx_path, mode="full_overwrite", base_dir=base_dir)
+
+    # Add a walk-in to 6U BEG
+    add_walkin_wrestler(
+        t,
+        name="Walkin Newcomer",
+        weight=42.5,
+        team="Mat Club",
+        division="Coed",
+        age_group="6U",
+        skill_level="Beginner",
+        base_dir=base_dir,
+    )
+    # Scratch one original wrestler
+    orig_w = t.result.groups[0].wrestlers[0]
+    scratch_wrestler(t, orig_w.id, base_dir=base_dir)
+
+    # Re-optimize 6U brackets
+    t, orig_cnt, new_cnt = reoptimize_active_brackets(
+        t,
+        division="Coed",
+        age_group="6U",
+        preserve_locked=True,
+        base_dir=base_dir,
+    )
+
+    reloaded = load_tournament(t.slug, base_dir=base_dir)
+    all_active_names = [w.name for g in reloaded.result.groups for w in g.wrestlers]
+    assert "Walkin Newcomer" in all_active_names
+    assert orig_w.name not in all_active_names
+
+    # Check 6U beginner groups sizes are balanced
+    beg_groups = [g for g in reloaded.result.groups if g.age_group == "6U" and g.skill_level == "Beginner"]
+    for g in beg_groups:
+        assert 2 <= g.size <= 4
+        assert len(g.bouts) > 0
 

@@ -24,6 +24,7 @@ from bracketman.store import (
     merge_brackets,
     move_wrestler,
     regenerate_brackets_by_ids,
+    reoptimize_active_brackets,
     restore_scratched_wrestler,
     save_tournament,
     scratch_wrestler,
@@ -555,64 +556,150 @@ def _render_tweak_and_regenerate_tab(tournament: SavedTournament) -> None:
 
     st.markdown("---")
 
-    # 2. Targeted Bracket Regeneration by ID(s)
-    st.subheader("🔄 Regenerate Specific Bracket(s) by ID")
-    st.markdown(
-        "Select one or more **Bracket IDs** (or type comma-separated IDs) to re-run the Madison grouping algorithm "
-        "on just those brackets without touching the rest of the tournament."
+    # 2. Refresh & Rethink Brackets (Scope or Targeted by IDs)
+    st.subheader("🔄 Refresh & Rethink Brackets (Madison DP Engine)")
+    st.caption(
+        "After scratches and walk-ins, you can re-run the Madison grouping engine to re-balance weights, "
+        "group sizes, and teammate separations. Scratched wrestlers are automatically excluded, and all walk-ins are included."
     )
 
-    rc1, rc2 = st.columns([2, 1])
-    with rc1:
-        selected_regen_ids = st.multiselect(
-            "Select Bracket ID(s) to Regenerate",
-            options=all_gids,
-            format_func=lambda gid: _group_summary_label(gid_map[gid]),
-        )
-    with rc2:
-        typed_regen_ids = st.text_input(
-            "Or Paste Comma-Separated Bracket IDs",
-            placeholder="e.g. COED-8U-BEG-01, COED-8U-BEG-02",
-        )
+    rethink_mode = st.radio(
+        "How would you like to rethink the brackets?",
+        options=[
+            "By Division / Age Group (or Whole Tournament)",
+            "Targeted Selection by Specific Bracket ID(s)",
+        ],
+        horizontal=True,
+        key="rethink_mode",
+    )
 
-    ro1, ro2, ro3, ro4 = st.columns(4)
-    with ro1:
-        regen_target_sz = st.number_input("Target Size Override", min_value=2, max_value=8, value=4, key="rg_tsz")
-    with ro2:
-        regen_max_sz = st.number_input("Max Size Override", min_value=2, max_value=8, value=4, key="rg_msz")
-    with ro3:
-        regen_spread = st.number_input(
-            "Base Max Spread % Override", min_value=3.0, max_value=30.0, value=10.0, step=0.5, key="rg_sp"
-        )
-    with ro4:
-        combine_pool = st.checkbox(
-            "Pool selected brackets together (even if different skill/age)",
-            value=False,
-            help="Check this to combine e.g. a solo Advanced bracket and a Beginner bracket into one shared pool and regroup them.",
-        )
-
-    if st.button("⚡ Regenerate Selected Bracket(s)", type="primary"):
-        combined_ids = list(selected_regen_ids)
-        if typed_regen_ids.strip():
-            for part in typed_regen_ids.split(","):
-                if part.strip():
-                    combined_ids.append(part.strip().upper())
-        if not combined_ids:
-            st.error("Please select or enter at least one Bracket ID.")
-        else:
-            try:
-                regenerate_brackets_by_ids(
-                    tournament,
-                    group_ids=combined_ids,
-                    target_group_size=int(regen_target_sz),
-                    max_group_size=int(regen_max_sz),
-                    max_weight_spread_pct=float(regen_spread),
-                    combine_across_skills_or_ages=bool(combine_pool),
+    if rethink_mode == "By Division / Age Group (or Whole Tournament)":
+        with st.container(border=True):
+            st.markdown("##### 🌐 Re-Optimize Active Wrestler Pools")
+            st.caption(
+                "Pool all active (non-scratched + walk-in) wrestlers in the selected scope and re-partition into optimal brackets. "
+                "Any locked brackets will remain untouched unless you choose to include them."
+            )
+            sc1, sc2, sc3 = st.columns(3)
+            with sc1:
+                div_choices = ["ALL (Both Coed & Girls)"] + list(cfg.divisions)
+                sel_re_div = st.selectbox("Division Scope", div_choices, key="re_div")
+                re_div_val = None if sel_re_div.startswith("ALL") else sel_re_div
+            with sc2:
+                age_choices = ["ALL Age Groups"] + list(cfg.age_groups)
+                sel_re_age = st.selectbox("Age Group Scope", age_choices, key="re_age")
+                re_age_val = None if sel_re_age.startswith("ALL") else sel_re_age
+            with sc3:
+                preserve_lk = st.checkbox(
+                    "Preserve Locked / Hand-Tweaked Brackets",
+                    value=True,
+                    help="Keep brackets you have manually locked or swapped intact.",
+                    key="re_pres_lk",
                 )
-                st.success(f"Regenerated bracket(s): {', '.join(combined_ids)}")
-                st.rerun()
-            except Exception as exc:
-                st.error(str(exc))
+
+            ro1, ro2, ro3 = st.columns(3)
+            with ro1:
+                re_target_sz = st.number_input(
+                    "Target Size",
+                    min_value=2,
+                    max_value=8,
+                    value=int(cfg.default_rule.target_group_size),
+                    key="re_tsz",
+                )
+            with ro2:
+                re_max_sz = st.number_input(
+                    "Max Size",
+                    min_value=2,
+                    max_value=8,
+                    value=int(cfg.default_rule.max_group_size),
+                    key="re_msz",
+                )
+            with ro3:
+                re_spread = st.number_input(
+                    "Base Max Spread %",
+                    min_value=3.0,
+                    max_value=30.0,
+                    value=float(cfg.default_rule.max_weight_spread_pct),
+                    step=0.5,
+                    key="re_sp",
+                )
+
+            if st.button("⚡ Rethink & Re-Optimize Brackets", type="primary", key="btn_reoptimize_scope"):
+                try:
+                    _, orig_c, new_c = reoptimize_active_brackets(
+                        tournament,
+                        division=re_div_val,
+                        age_group=re_age_val,
+                        preserve_locked=preserve_lk,
+                        target_group_size=int(re_target_sz),
+                        max_group_size=int(re_max_sz),
+                        max_weight_spread_pct=float(re_spread),
+                    )
+                    st.success(
+                        f"Successfully re-optimized! Replaced {orig_c} bracket(s) with {new_c} newly balanced bracket(s)."
+                    )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+    else:
+        with st.container(border=True):
+            st.markdown("##### 🎯 Targeted Regeneration by Bracket ID(s)")
+            st.caption(
+                "Select one or more Bracket IDs (or type comma-separated IDs) to re-run the Madison grouping algorithm "
+                "on just those specific brackets without touching the rest of the tournament."
+            )
+
+            rc1, rc2 = st.columns([2, 1])
+            with rc1:
+                selected_regen_ids = st.multiselect(
+                    "Select Bracket ID(s) to Regenerate",
+                    options=all_gids,
+                    format_func=lambda gid: _group_summary_label(gid_map[gid]),
+                )
+            with rc2:
+                typed_regen_ids = st.text_input(
+                    "Or Paste Comma-Separated Bracket IDs",
+                    placeholder="e.g. COED-8U-BEG-01, COED-8U-BEG-02",
+                )
+
+            ro1, ro2, ro3, ro4 = st.columns(4)
+            with ro1:
+                regen_target_sz = st.number_input("Target Size Override", min_value=2, max_value=8, value=4, key="rg_tsz")
+            with ro2:
+                regen_max_sz = st.number_input("Max Size Override", min_value=2, max_value=8, value=4, key="rg_msz")
+            with ro3:
+                regen_spread = st.number_input(
+                    "Base Max Spread % Override", min_value=3.0, max_value=30.0, value=10.0, step=0.5, key="rg_sp"
+                )
+            with ro4:
+                combine_pool = st.checkbox(
+                    "Pool selected brackets together (even if different skill/age)",
+                    value=False,
+                    help="Check this to combine e.g. a solo Advanced bracket and a Beginner bracket into one shared pool and regroup them.",
+                )
+
+            if st.button("⚡ Regenerate Selected Bracket(s)", type="primary"):
+                combined_ids = list(selected_regen_ids)
+                if typed_regen_ids.strip():
+                    for part in typed_regen_ids.split(","):
+                        if part.strip():
+                            combined_ids.append(part.strip().upper())
+                if not combined_ids:
+                    st.error("Please select or enter at least one Bracket ID.")
+                else:
+                    try:
+                        regenerate_brackets_by_ids(
+                            tournament,
+                            group_ids=combined_ids,
+                            target_group_size=int(regen_target_sz),
+                            max_group_size=int(regen_max_sz),
+                            max_weight_spread_pct=float(regen_spread),
+                            combine_across_skills_or_ages=bool(combine_pool),
+                        )
+                        st.success(f"Regenerated bracket(s): {', '.join(combined_ids)}")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(str(exc))
 
     st.markdown("---")
 

@@ -623,6 +623,94 @@ def regenerate_brackets_by_ids(
     return tournament
 
 
+def reoptimize_active_brackets(
+    tournament: SavedTournament,
+    division: str | None = None,
+    age_group: str | None = None,
+    preserve_locked: bool = True,
+    target_group_size: int | None = None,
+    max_group_size: int | None = None,
+    min_group_size: int | None = None,
+    max_weight_spread_pct: float | None = None,
+    separate_teammates: bool | None = None,
+    base_dir: Path = DEFAULT_STORE_DIR,
+) -> tuple[SavedTournament, int, int]:
+    """Re-run Madison grouping on active wrestlers in the specified scope (division/age or whole tournament).
+
+    - Excludes scratched wrestlers (they are already removed from active groups).
+    - Includes all active walk-ins.
+    - If preserve_locked is True, brackets marked locked/manually modified are preserved untouched.
+    - Regroups the unlocked active wrestlers using Madison dynamic programming.
+    - Returns (tournament, original_bracket_count_in_scope, new_bracket_count_in_scope).
+    """
+    cfg = tournament.config
+
+    matching_groups: list[BracketGroup] = []
+    other_groups: list[BracketGroup] = []
+    for g in tournament.result.groups:
+        match_div = division is None or division == "ALL" or g.division == division
+        match_age = age_group is None or age_group == "ALL" or g.age_group == age_group
+        if match_div and match_age:
+            matching_groups.append(g)
+        else:
+            other_groups.append(g)
+
+    if not matching_groups:
+        raise ValueError("No brackets match the selected division and age group.")
+
+    if preserve_locked:
+        locked_in_scope = [g for g in matching_groups if g.locked or g.manually_modified]
+        unlocked_in_scope = [g for g in matching_groups if not (g.locked or g.manually_modified)]
+    else:
+        locked_in_scope = []
+        unlocked_in_scope = matching_groups
+
+    if not unlocked_in_scope:
+        raise ValueError(
+            "All matching brackets are currently locked. Unlock them or uncheck 'Preserve locked brackets' to re-optimize."
+        )
+
+    pool = [w for g in unlocked_in_scope for w in g.wrestlers]
+    if not pool:
+        raise ValueError("No active wrestlers found in the selected unlocked brackets.")
+
+    re_cfg = TournamentConfig.from_dict(cfg.to_dict())
+    if target_group_size is not None:
+        re_cfg.default_rule.target_group_size = target_group_size
+    if max_group_size is not None:
+        re_cfg.default_rule.max_group_size = max_group_size
+    if min_group_size is not None:
+        re_cfg.default_rule.min_group_size = min_group_size
+    if max_weight_spread_pct is not None:
+        re_cfg.default_rule.max_weight_spread_pct = max_weight_spread_pct
+    if separate_teammates is not None:
+        re_cfg.default_rule.separate_teammates = separate_teammates
+
+    new_res = build_tournament_groups(
+        wrestlers=pool,
+        config=re_cfg,
+        source=tournament.result.source,
+    )
+
+    tournament.result.groups = other_groups + locked_in_scope + new_res.groups
+    reindex_and_refresh_all_groups(tournament, renumber_ids=True)
+
+    scope_parts = []
+    if division and division != "ALL":
+        scope_parts.append(division)
+    if age_group and age_group != "ALL":
+        scope_parts.append(age_group)
+    scope_str = " ".join(scope_parts) if scope_parts else "Whole Tournament"
+
+    tournament.log(
+        f"Re-optimized {len(unlocked_in_scope)} bracket(s) in {scope_str} "
+        f"({len(pool)} wrestlers) -> {len(new_res.groups)} bracket(s) "
+        f"(preserved {len(locked_in_scope)} locked)."
+    )
+    save_tournament(tournament, base_dir)
+    return tournament, len(unlocked_in_scope), len(new_res.groups)
+
+
 def find_candidate_brackets_for_walkin(
     tournament: SavedTournament,
     weight: float,

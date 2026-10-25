@@ -16,7 +16,7 @@ from bracketman.exporters.csv_xlsx import export_csv_files, export_xlsx_workbook
 from bracketman.exporters.html import export_printable_html
 from bracketman.grouping.madison import build_tournament_groups
 from bracketman.io.loader import load_wrestlers
-from bracketman.store import load_tournament, regenerate_brackets_by_ids
+from bracketman.store import load_tournament, regenerate_brackets_by_ids, reoptimize_active_brackets
 
 
 def _load_config(config_path: str | None) -> TournamentConfig:
@@ -235,6 +235,39 @@ def regenerate_cmd(
         combine_across_skills_or_ages=combine_pool,
     )
     click.echo(f"Regenerated bracket(s) {', '.join(bracket_ids)} in tournament '{t.name}'.")
+
+
+@main.command("reoptimize")
+@click.argument("tournament_slug")
+@click.option("--division", default=None, help="Filter to specific division (e.g. Coed or Girls).")
+@click.option("--age-group", default=None, help="Filter to specific age group (e.g. 8U).")
+@click.option("--include-locked", is_flag=True, help="Also re-optimize locked/manually tweaked brackets.")
+@click.option("--target-size", type=int, default=None, help="Target bracket size override.")
+@click.option("--max-size", type=int, default=None, help="Maximum bracket size override.")
+@click.option("--max-spread-pct", type=float, default=None, help="Base max weight spread % override.")
+def reoptimize_cmd(
+    tournament_slug: str,
+    division: str | None,
+    age_group: str | None,
+    include_locked: bool,
+    target_size: int | None,
+    max_size: int | None,
+    max_spread_pct: float | None,
+) -> None:
+    """Re-run Madison grouping on all active wrestlers in a division/age group or tournament-wide."""
+    t = load_tournament(tournament_slug)
+    t, orig_cnt, new_cnt = reoptimize_active_brackets(
+        t,
+        division=division,
+        age_group=age_group,
+        preserve_locked=not include_locked,
+        target_group_size=target_size,
+        max_group_size=max_size,
+        max_weight_spread_pct=max_spread_pct,
+    )
+    click.echo(
+        f"Successfully re-optimized active brackets in '{t.name}': {orig_cnt} bracket(s) -> {new_cnt} bracket(s)."
+    )
 
 
 @main.command("ui")
