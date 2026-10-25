@@ -61,12 +61,33 @@
     - Walk-in engine ranks candidate brackets by suitability and weight spread.
     - Scratches remove wrestlers from active brackets and store them in `scratched_wrestlers` with a 1-click restore mechanism.
 
+### Decision 6: Scope-Wide & Targeted Rethinking Engine (`reoptimize_active_brackets`)
+- **Context**: During tournament check-in, scratching no-shows and registering walk-ins leaves some brackets sparse or unbalanced. Re-importing from Google Sheets wipes walk-ins entered locally.
+- **Decision**: Added `reoptimize_active_brackets` to [store.py](file:///home/simon/Code/Personal/bracketman/src/bracketman/store.py).
+  - Collects all active wrestlers (includes walk-ins, excludes scratches) across whole tournament or selected division/age group.
+  - Leaves locked/hand-tweaked brackets untouched when `preserve_locked=True`.
+  - Re-partitions active pool using Madison dynamic programming.
+  - Exposed via Web UI tab and CLI command `bracketman reoptimize <slug>`.
+
+### Decision 7: Secure Local-Only Mode by Default
+- **Context**: At tournament venues on shared gym/school Wi-Fi, other devices on the network should not be able to discover the app or modify live brackets.
+- **Decision**: `bracketman ui` binds to `127.0.0.1` by default. Optional `--lan` flag binds to `0.0.0.0` when network access across home devices is explicitly desired.
+
+### Decision 8: 1-Page Printable Bracket Redesign with Official Keepsake Box
+- **Context**: Sheets must fit on exactly 1 printed page for mat tables and be awarded to 1st place champions as an official keepsake.
+- **Decision**:
+  - Prominent header with Tournament Name, Date, Division, Age, Experience, and Weight Range.
+  - Official Placement & Awards Section (`1ST PLACE`, `2ND PLACE`, `3RD PLACE`, `4TH PLACE`) with clean handwriting blanks.
+  - Condensed 2-column micro-reference table for tiebreakers and point spread criteria.
+  - Print CSS enforcing `@page { size: letter portrait; margin: 0.25in 0.3in; }` and `.bracket-sheet { height: 10.45in; max-height: 10.45in; page-break-inside: avoid; page-break-after: always; }`.
+
 ---
 
 ## 3. Repository Structure
 
 ```text
 bracketman/
+├── AGENTS.md                   # Agent directives: tests, docs, caveman token saving
 ├── pyproject.toml              # Build & dependency metadata (CLI + Streamlit)
 ├── README.md                   # Quick start, usage, and CLI reference
 ├── docs/
