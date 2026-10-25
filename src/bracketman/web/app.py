@@ -59,7 +59,7 @@ def _render_sidebar() -> SavedTournament | None:
     logo_path = Path("assets/logo.jpg")
     if logo_path.exists():
         st.sidebar.image(str(logo_path), use_container_width=True)
-    st.sidebar.title("🤼 Bracketman")
+    st.sidebar.title("Bracketman")
     st.sidebar.caption("Tournament Grouping & Bracket Manager")
 
     tournaments = list_tournaments()
@@ -859,21 +859,29 @@ def _render_history_tab(tournament: SavedTournament) -> None:
 
 
 def main() -> None:
+    logo_icon = "assets/logo.jpg" if Path("assets/logo.jpg").exists() else "🚀"
     st.set_page_config(
         page_title="Bracketman — Wrestling Tournament Manager",
-        page_icon="🤼",
+        page_icon=logo_icon,
         layout="wide",
     )
 
     active = _render_sidebar()
+    banner_path = Path("assets/banner.jpg")
+
     if active is None:
-        st.title("🤼 Welcome to Bracketman")
+        if banner_path.exists():
+            st.image(str(banner_path), use_container_width=True)
+        st.title("Welcome to Bracketman")
         st.markdown(
             "Create your first tournament in the sidebar on the left and paste your Google Sheet link to build brackets!"
         )
         return
 
-    st.title(f"🤼 {active.name}")
+    if banner_path.exists():
+        st.image(str(banner_path), use_container_width=True)
+
+    st.title(active.name)
     if active.sheet_url:
         st.caption(f"Connected Google Sheet: {active.sheet_url}")
 
