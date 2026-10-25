@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bracketman"
+version = "0.1.0"
+description = "Wrestling tournament grouping and bracket generator from Google Sheets"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "PyYAML>=6.0",
+    "requests>=2.28",
+    "streamlit>=1.30",
+]
+
+[project.scripts]
+bracketman = "bracketman.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

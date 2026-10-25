@@ -1,0 +1,133 @@
+# Bracketman Tournament Configuration
+tournament_name: "Youth Wrestling Tournament"
+
+# Canonical age groups in chronological order (14U is mapped into 15U below)
+age_groups:
+  - "4U"
+  - "6U"
+  - "8U"
+  - "10U"
+  - "12U"
+  - "15U"
+
+# Canonical skill levels
+skill_levels:
+  - "Beginner"
+  - "Advanced"
+
+# Bracket divisions (Boys/Coed and Girls Only)
+divisions:
+  - "Coed"
+  - "Girls"
+
+# Map spreadsheet skill values (including Novice/Experienced and common typos) to canonical levels
+skill_aliases:
+  Beginner:
+    - "beginner"
+    - "novice"
+    - "beg"
+    - "nov"
+    - "rookie"
+    - "1"
+  Advanced:
+    - "advanced"
+    - "experienced"
+    - "experianced"
+    - "adv"
+    - "exp"
+    - "open"
+    - "2"
+
+# Map spreadsheet age group strings to canonical age groups (14U and 15U are treated as the same)
+age_group_aliases:
+  4U: ["4u", "4 & under", "tot"]
+  6U: ["6u", "6 & under"]
+  8U: ["8u", "8 & under"]
+  10U: ["10u", "10 & under"]
+  12U: ["12u", "12 & under"]
+  15U: ["15u", "15 & under", "14u", "14U", "14 & under", "14 and under"]
+
+# Global default grouping rules (Madison weight pooling)
+defaults:
+  mode: "madison"               # "madison" (dynamic weight pools) or "fixed_classes"
+  target_group_size: 4          # Target 4-person brackets and below (4-man, 3-man, 2-man)
+  min_group_size: 3             # Prefer 3-4 wrestlers when weights allow; 2-man allowed when needed
+  max_group_size: 4             # Max 4 wrestlers per bracket by default (configurable per division/age)
+  max_weight_spread_pct: 10.0   # Base % spread at light weights (<50 lbs); scales up progressively
+  progressive_spread: true      # Automatically allow wider lbs/% spread as wrestler weight increases
+  max_weight_spread_lbs: null   # Optional hard cap in lbs (null = scale dynamically with weight)
+  separate_teammates: true      # Minimize same-club wrestlers in the same bracket group
+  bracket_format: "auto"        # "auto", "round_robin", or "bracket_8"
+
+# Straggler handling options
+allow_skill_merge_for_stragglers: false  # Set true to auto-merge solo Advanced/Beginner kids of same age/weight
+allow_age_merge_for_stragglers: false    # Set true to auto-merge solo kids into adjacent age group if weight fits
+
+# Division-specific rule overrides
+division_rules:
+  Girls:
+    # Girls divisions often have fewer wrestlers spread across weights; allow slightly wider base % spread
+    min_group_size: 2
+    max_weight_spread_pct: 12.0
+
+# Per-Age-Group (and nested per-Skill-Level) rule overrides
+age_group_rules:
+  4U:
+    target_group_size: 4
+    max_group_size: 4
+    max_weight_spread_pct: 10.0
+  6U:
+    target_group_size: 4
+    max_group_size: 4
+    max_weight_spread_pct: 10.0
+    skills:
+      Beginner:
+        target_group_size: 4
+        max_group_size: 4
+      Advanced:
+        target_group_size: 4
+        max_group_size: 4
+  8U:
+    target_group_size: 4
+    max_group_size: 4
+    max_weight_spread_pct: 10.0
+    skills:
+      Beginner:
+        target_group_size: 4
+        max_group_size: 4
+      Advanced:
+        target_group_size: 4
+        max_group_size: 4
+  10U:
+    target_group_size: 4
+    max_group_size: 4
+    max_weight_spread_pct: 10.0
+    skills:
+      Beginner:
+        target_group_size: 4
+        max_group_size: 4
+      Advanced:
+        target_group_size: 4
+        max_group_size: 4
+  12U:
+    target_group_size: 4
+    max_group_size: 4
+    max_weight_spread_pct: 10.0
+    skills:
+      Beginner:
+        target_group_size: 4
+        max_group_size: 4
+      Advanced:
+        target_group_size: 4
+        max_group_size: 4
+  15U:
+    target_group_size: 4
+    max_group_size: 4
+    max_weight_spread_pct: 10.0
+    skills:
+      Beginner:
+        target_group_size: 4
+        max_group_size: 4
+      Advanced:
+        target_group_size: 4
+        max_group_size: 4
