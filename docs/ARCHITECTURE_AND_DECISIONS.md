@@ -73,12 +73,13 @@
 - **Context**: At tournament venues on shared gym/school Wi-Fi, other devices on the network should not be able to discover the app or modify live brackets.
 - **Decision**: `bracketman ui` binds to `127.0.0.1` by default. Optional `--lan` flag binds to `0.0.0.0` when network access across home devices is explicitly desired.
 
-### Decision 8: 1-Page Printable Bracket Redesign with Official Keepsake Box
+### Decision 8: 1-Page Printable Bracket Redesign with Top Combined Awards & Tally Box
 - **Context**: Sheets must fit on exactly 1 printed page for mat tables and be awarded to 1st place champions as an official keepsake.
 - **Decision**:
-  - Prominent header with Tournament Name, Date, Division, Age, Experience, and Weight Range.
-  - Official Placement & Awards Section (`1ST PLACE`, `2ND PLACE`, `3RD PLACE`, `4TH PLACE`) with clean handwriting blanks.
-  - Condensed 2-column micro-reference table for tiebreakers and point spread criteria.
+  - Header: Tournament Name, Date, Division, Age, Experience, Weight Range, and `MAT #: _____` (scorer removed).
+  - Top Section: Combined Official Placement & Awards Box (`1ST PLACE`, `2ND PLACE`, `3RD PLACE`, `4TH PLACE`, club removed for clean single-line entry) placed directly above the Wrestler Win/Loss Tally Table right under the header.
+  - Middle Section: Main 3-period unshaded Bout Score Table.
+  - Bottom Section: Condensed 2-column micro-reference table for tiebreakers and point spread criteria.
   - Print CSS enforcing `@page { size: letter portrait; margin: 0.25in 0.3in; }` and `.bracket-sheet { height: 10.45in; max-height: 10.45in; page-break-inside: avoid; page-break-after: always; }`.
 
 ---
