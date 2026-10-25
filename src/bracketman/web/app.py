@@ -56,6 +56,9 @@ def _group_summary_label(g: BracketGroup) -> str:
 
 
 def _render_sidebar() -> SavedTournament | None:
+    logo_path = Path("assets/logo.jpg")
+    if logo_path.exists():
+        st.sidebar.image(str(logo_path), use_container_width=True)
     st.sidebar.title("🤼 Bracketman")
     st.sidebar.caption("Tournament Grouping & Bracket Manager")
 
