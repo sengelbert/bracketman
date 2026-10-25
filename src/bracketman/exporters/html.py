@@ -66,10 +66,10 @@ def _render_bout_and_tally_sheet(
     # 1. Combined Top Section: Official Placement Awards + Win / Loss Tally Table
     parts.append('<div class="combined-tally-awards">')
 
-    # 1A. Official Bracket Placement & Awards Section (Championship Keep-Sheet, club removed)
+    # 1A. Official Bracket Placement & Awards Section (club removed)
     parts.append(
         '<div class="awards-section">'
-        '<div class="awards-title">&#127942; OFFICIAL BRACKET PLACEMENT &amp; AWARDS &mdash; 1ST PLACE WINNER KEEP-SHEET</div>'
+        '<div class="awards-title">&#127942; OFFICIAL BRACKET PLACEMENT &amp; AWARDS</div>'
         '<table class="awards-table">'
         "<tbody>"
         "<tr>"
@@ -479,17 +479,6 @@ def export_printable_html(
 
     cards_html: list[str] = []
     for g in result.groups:
-        flags_html = ""
-        if g.flags:
-            items = []
-            for fl in g.flags:
-                sugg = f" — <em>{escape(fl.suggestion)}</em>" if fl.suggestion else ""
-                items.append(
-                    f'<div class="flag-item">'
-                    f"<strong>[{escape(fl.code)}]</strong> {escape(fl.message)}{sugg}</div>"
-                )
-            flags_html = f'<div class="flags-box no-print">{"".join(items)}</div>'
-
         body_html = _render_bout_and_tally_sheet(g, tournament_name=tournament_name, tournament_date=date_display)
 
         card = f"""
@@ -498,7 +487,6 @@ def export_printable_html(
                  data-age="{escape(g.age_group)}"
                  data-skill="{escape(g.skill_level)}"
                  data-flagged="{'true' if g.has_warnings else 'false'}">
-          {flags_html}
           {body_html}
         </section>
         """
@@ -821,14 +809,6 @@ def export_printable_html(
       font-size: 9px;
       margin-top: 1.5px;
       color: #222;
-    }}
-
-    .flags-box {{
-      margin-bottom: 6px;
-      padding: 4px 8px;
-      border: 1px dashed #000;
-      background: #fff;
-      font-size: 11px;
     }}
 
     @media print {{

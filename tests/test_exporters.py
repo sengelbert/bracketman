@@ -54,5 +54,7 @@ def test_exporters_create_valid_outputs(tmp_path: Path):
     assert "1<sup>ST</sup> PERIOD" in html_text
     assert "WRESTLER WIN / LOSS TALLY" in html_text
     assert "OFFICIAL BRACKET PLACEMENT &amp; AWARDS" in html_text
+    assert "WINNER KEEP-SHEET" not in html_text
+    assert "flags-box" not in html_text
     assert "1ST PLACE:" in html_text
     assert "ROUND-ROBIN TIE-BREAKER CRITERIA" in html_text
