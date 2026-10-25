@@ -44,7 +44,7 @@ def test_store_lifecycle_and_manual_tweaks(tmp_path: Path):
     base_dir = tmp_path / "tournaments"
     xlsx_path = _create_sample_xlsx(tmp_path / "rosters.xlsx")
 
-    t = create_tournament("SSWL Week 1", base_dir=base_dir)
+    t = create_tournament("Example Tournament", base_dir=base_dir)
     import_spreadsheet_to_tournament(t, xlsx_path, mode="full_overwrite", base_dir=base_dir)
 
     reloaded = load_tournament(t.slug, base_dir=base_dir)

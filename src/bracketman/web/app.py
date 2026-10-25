@@ -35,9 +35,7 @@ from bracketman.store import (
 )
 
 
-SAMPLE_SHEET_URL = (
-    "https://docs.google.com/spreadsheets/d/1VWSHOuqCDildUjOL7BdS7CQ4OdJ6K78m8Osr3RjqoLY/edit?usp=drivesdk"
-)
+DEFAULT_EXAMPLE_XLSX = Path("data/example_tournament.xlsx")
 MERGE_ID_RE = re.compile(r"Merge into ([A-Z0-9-]+)")
 
 
@@ -65,14 +63,19 @@ def _render_sidebar() -> SavedTournament | None:
     st.sidebar.caption("Tournament Grouping & Bracket Manager")
 
     tournaments = list_tournaments()
+    if not tournaments and DEFAULT_EXAMPLE_XLSX.exists():
+        t = create_tournament(name="Example Tournament")
+        import_spreadsheet_to_tournament(t, DEFAULT_EXAMPLE_XLSX, mode="full_overwrite")
+        tournaments = [t]
+
     slug_map = {t.slug: t for t in tournaments}
 
     with st.sidebar.expander("➕ Create New Tournament", expanded=not bool(tournaments)):
         with st.form("create_tournament_form", clear_on_submit=True):
-            new_name = st.text_input("Tournament Name", placeholder="e.g. SSWL Week 1 Qualifier")
+            new_name = st.text_input("Tournament Name", placeholder="e.g. Example Tournament")
             new_url = st.text_input(
                 "Google Sheet URL (optional)",
-                value=SAMPLE_SHEET_URL if not tournaments else "",
+                value="",
                 placeholder="https://docs.google.com/spreadsheets/d/...",
             )
             import_now = st.checkbox("Import & build brackets immediately", value=True)
@@ -141,7 +144,7 @@ def _render_import_tab(tournament: SavedTournament) -> None:
     with col_src1:
         sheet_url = st.text_input(
             "Google Spreadsheet URL",
-            value=tournament.sheet_url or SAMPLE_SHEET_URL,
+            value=tournament.sheet_url or "",
             placeholder="https://docs.google.com/spreadsheets/d/.../edit",
         )
     with col_src2:
