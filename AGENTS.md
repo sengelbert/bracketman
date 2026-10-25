@@ -21,6 +21,12 @@ Agent must obey rules. No exceptions.
 - Short sentences. Punchy. High signal.
 - Save tokens. Help user fast.
 
-## 4. STREAMLIT DAEMON RESTART RULE
-- Streamlit daemon cache python imports in memory.
-- If add or change imports/functions in backend modules, kill running Streamlit task and restart fresh.
+## 4. ALWAYS RESTART STREAMLIT DAEMON AFTER CODE CHANGES
+- Streamlit daemon caches Python imports in memory (`sys.modules`).
+- Hot reload does NOT reload modified backend modules (`exporters`, `store`, `grouping`, etc.).
+- After ANY code change in `src/`:
+  1. Kill running Streamlit daemon task.
+  2. Restart fresh Streamlit daemon on port 8503 (`bracketman ui` or `streamlit run`).
+  3. Verify HTTP 200 with `curl -sI http://127.0.0.1:8503`.
+  4. If print/export logic changed, regenerate exports for active tournaments on disk.
+  5. Never leave user looking at stale cache.
