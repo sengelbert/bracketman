@@ -2,35 +2,82 @@
 
 Designed to match the classic mat-table bout sheet layout (BOUT | WT | WRESTLERS NAME |
 1ST PERIOD | PTS | 2ND PERIOD | PTS | 3RD PERIOD | PTS) paired with a Wrestler
-Win/Loss Tally table, using crisp black borders and zero grey shading.
+Win/Loss Tally table, official 1st–4th placement awards lines for the championship keep-sheet,
+and condensed round-robin tiebreaker rules & activity point spreads.
+All rendered with crisp black borders, zero grey shading, and locked to 1 single page.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from html import escape
 from pathlib import Path
 
 from bracketman.models import BracketGroup, TournamentResult
 
 
-def _render_bout_and_tally_sheet(group: BracketGroup) -> str:
-    """Render the unshaded 3-period bout score sheet + wrestler Win/Loss tally table."""
+def _render_bout_and_tally_sheet(
+    group: BracketGroup,
+    tournament_name: str = "Wrestling Tournament",
+    tournament_date: str = "",
+) -> str:
+    """Render the full single-page printable bracket sheet:
+
+    1. Header: Tournament Name, Date, Division, Age Group, Experience, Weights, Mat #, Table #
+    2. Main Bout Score Table: 3 periods, unshaded, bout numbers
+    3. Wrestler Win/Loss Tally Table: wins, losses, tiebreaker points, place
+    4. Official Bracket Placement & Awards Section (Championship Keep-Sheet)
+    5. Condensed Round-Robin Tiebreaker & Point Spread Reference Box
+    """
+    date_display = tournament_date or datetime.now().strftime("%B %d, %Y")
     parts: list[str] = []
 
+    # 0. Sheet Header with Tournament Name, Date, Age, Weight, and Experience Level
+    parts.append('<header class="sheet-header">')
+    parts.append('<div class="header-top-row">')
+    parts.append(
+        f'<div class="header-title-block">'
+        f'<span class="tourney-name">{escape(tournament_name)}</span>'
+        f'<span class="header-sep">&bull;</span>'
+        f'<span class="tourney-date">{escape(date_display)}</span>'
+        f"</div>"
+    )
+    parts.append(
+        '<div class="header-table-info">'
+        '<span class="table-field"><strong class="field-lbl">MAT #:</strong> <span class="field-blank mat-blank"></span></span>'
+        '<span class="table-field"><strong class="field-lbl">TABLE / SCORER:</strong> <span class="field-blank scorer-blank"></span></span>'
+        "</div>"
+    )
+    parts.append("</div>")
+
+    # Metadata Strip (Bracket ID, Division, Age Group, Experience Level, Weight Range & Spread)
+    parts.append(
+        '<div class="header-meta-row">'
+        f'<span class="meta-gid"><strong>{escape(group.group_id)}</strong></span>'
+        f'<span class="meta-tag"><strong>DIVISION:</strong> {escape(group.division.upper())}</span>'
+        f'<span class="meta-tag"><strong>AGE GROUP:</strong> {escape(group.age_group)}</span>'
+        f'<span class="meta-tag"><strong>EXPERIENCE:</strong> {escape(group.skill_level.upper())}</span>'
+        f'<span class="meta-tag meta-wt"><strong>WEIGHTS:</strong> {escape(group.weight_label)} '
+        f"({group.weight_spread_lbs:g} lb / {group.weight_spread_pct:.1f}% spread)</span>"
+        "</div>"
+    )
+    parts.append("</header>")
+
     # 1. Main Bout Score Sheet (BOUT | WT | WRESTLERS NAME | 1ST PERIOD | PTS | 2ND PERIOD | PTS | 3RD PERIOD | PTS)
+    parts.append('<div class="bout-table-wrap">')
     parts.append('<table class="bout-score-table">')
     parts.append(
-        '<colgroup>'
+        "<colgroup>"
         '<col class="col-bout" /><col class="col-wt" /><col class="col-name" />'
         '<col class="col-period" /><col class="col-pts" /><col class="col-period" />'
         '<col class="col-pts" /><col class="col-period" /><col class="col-pts" />'
-        '</colgroup>'
-        '<thead><tr>'
-        '<th class="th-bout">B<br/>O<br/>U<br/>T</th><th>WT</th><th>WRESTLERS<br/>NAME</th>'
+        "</colgroup>"
+        "<thead><tr>"
+        '<th class="th-bout">B<br/>O<br/>U<br/>T</th><th>WT</th><th>WRESTLERS NAME</th>'
         '<th>1<sup>ST</sup> PERIOD</th><th class="th-pts">P<br/>T<br/>S</th>'
         '<th>2<sup>ND</sup> PERIOD</th><th class="th-pts">P<br/>T<br/>S</th>'
         '<th>3<sup>RD</sup> PERIOD</th><th class="th-pts">P<br/>T<br/>S</th>'
-        '</tr></thead><tbody>'
+        "</tr></thead><tbody>"
     )
 
     if group.bouts:
@@ -55,7 +102,7 @@ def _render_bout_and_tally_sheet(group: BracketGroup) -> str:
                 f'<td class="cell-pts"></td>'
                 f"</tr>"
             )
-            # Row 2 of the bout (Wrestler B) — thick bottom border separates this bout from the next
+            # Row 2 of the bout (Wrestler B) — thick bottom border separates this bout from next
             parts.append(
                 f'<tr class="bout-row-bottom">'
                 f'<td class="cell-bout"></td>'
@@ -92,7 +139,7 @@ def _render_bout_and_tally_sheet(group: BracketGroup) -> str:
                 f"</tr>"
             )
     else:
-        # Uncontested / solo wrestler: still render 2 blank bout pairs for exhibition/walk-on matches
+        # Uncontested / solo wrestler: render 2 blank bout pairs for exhibition matches
         w = group.wrestlers[0]
         parts.append(
             f'<tr class="bout-row-top">'
@@ -113,19 +160,22 @@ def _render_bout_and_tally_sheet(group: BracketGroup) -> str:
             f"</tr>"
         )
 
-    parts.append("</tbody></table>")
+    parts.append("</tbody></table></div>")
 
     # 2. Wrestler Win / Loss Tally Area
     parts.append('<div class="tally-section">')
-    parts.append('<div class="tally-title">WRESTLER WIN / LOSS TALLY &amp; PLACEMENT</div>')
+    parts.append('<div class="tally-title">WRESTLER WIN / LOSS TALLY</div>')
     parts.append(
         '<table class="tally-table">'
-        '<thead><tr>'
-        '<th class="col-seed">#</th><th class="col-wt">WT</th>'
-        '<th class="col-tally-name">WRESTLERS NAME</th><th class="col-club">SCHOOL / CLUB</th>'
-        '<th class="col-wl">WINS</th><th class="col-wl">LOSSES</th>'
-        '<th class="col-tb">TIEBREAKER / PTS</th><th class="col-place">PLACE</th>'
-        '</tr></thead><tbody>'
+        "<colgroup>"
+        '<col class="col-seed" /><col class="col-wt" /><col class="col-tally-name" />'
+        '<col class="col-club" /><col class="col-wl" /><col class="col-wl" />'
+        '<col class="col-tb" /><col class="col-place" />'
+        "</colgroup>"
+        "<thead><tr>"
+        "<th>#</th><th>WT</th><th>WRESTLERS NAME</th><th>SCHOOL / CLUB</th>"
+        "<th>WINS</th><th>LOSSES</th><th>TIEBREAKER / PTS</th><th>PLACE</th>"
+        "</tr></thead><tbody>"
     )
     for idx, w in enumerate(group.wrestlers, start=1):
         parts.append(
@@ -142,98 +192,170 @@ def _render_bout_and_tally_sheet(group: BracketGroup) -> str:
         )
     parts.append("</tbody></table></div>")
 
-    # 3. Round-Robin Tie-Breaker Criteria & Activity / Advancement Points Reference
+    # 3. Official Bracket Placement & Awards Section (Championship Keep-Sheet)
+    parts.append(
+        '<div class="awards-section">'
+        '<div class="awards-title">&#127942; OFFICIAL BRACKET PLACEMENT &amp; AWARDS &mdash; 1ST PLACE WINNER KEEP-SHEET</div>'
+        '<table class="awards-table">'
+        "<tbody>"
+        "<tr>"
+        '<td class="col-award"><span class="award-place">1ST PLACE:</span> <span class="award-name-line"></span> <span class="award-club-lbl">CLUB:</span> <span class="award-club-line"></span></td>'
+        '<td class="col-award"><span class="award-place">2ND PLACE:</span> <span class="award-name-line"></span> <span class="award-club-lbl">CLUB:</span> <span class="award-club-line"></span></td>'
+        "</tr>"
+        "<tr>"
+        '<td class="col-award"><span class="award-place">3RD PLACE:</span> <span class="award-name-line"></span> <span class="award-club-lbl">CLUB:</span> <span class="award-club-line"></span></td>'
+        '<td class="col-award"><span class="award-place">4TH PLACE:</span> <span class="award-name-line"></span> <span class="award-club-lbl">CLUB:</span> <span class="award-club-line"></span></td>'
+        "</tr>"
+        "</tbody>"
+        "</table>"
+        "</div>"
+    )
+
+    # 4. Condensed Round-Robin Tie-Breaker Criteria & Activity / Advancement Points Reference
     parts.append(
         '<div class="criteria-section">'
         '<table class="criteria-table">'
-        '<thead><tr>'
+        "<thead><tr>"
         '<th class="col-crit-half">ROUND-ROBIN TIE-BREAKER CRITERIA (TABLE REFERENCE)</th>'
         '<th class="col-crit-half">ACTIVITY / ADVANCEMENT POINTS &amp; DECISION SPREADS</th>'
-        '</tr></thead>'
-        '<tbody><tr>'
+        "</tr></thead>"
+        "<tbody><tr>"
         '<td class="criteria-cell">'
-        '<strong>1. Win / Loss Record:</strong> Best overall match record in the bracket.<br/>'
-        '<strong>2. Head-to-Head:</strong> Winner of direct bout (applies when 2 wrestlers are tied).<br/>'
-        '<strong>3. Activity Points:</strong> Most total advancement / activity points earned across all bouts.<br/>'
-        '<strong>4. Most Falls (Pins):</strong> Most pins in least combined pin time.<br/>'
-        '<strong>5. Most Tech Falls:</strong> Most wins by technical fall.<br/>'
-        '<strong>6. Most Major Decisions:</strong> Most wins by major decision.<br/>'
-        '<strong>7. Match Points:</strong> Most total match points scored across all bouts (then first takedown).'
-        '</td>'
+        '<div class="crit-line"><strong>1. Win/Loss Record:</strong> Best overall match record in bracket.</div>'
+        '<div class="crit-line"><strong>2. Head-to-Head:</strong> Direct bout winner (applies for 2-way ties).</div>'
+        '<div class="crit-line"><strong>3. Activity Points:</strong> Most total match advancement points earned.</div>'
+        '<div class="crit-line"><strong>4. Most Falls (Pins):</strong> Most pins in least cumulative pin time.</div>'
+        '<div class="crit-line"><strong>5. Tech Falls</strong> &bull; <strong>6. Major Decisions</strong> &bull; <strong>7. Total Match Pts</strong></div>'
+        "</td>"
         '<td class="criteria-cell">'
-        '<strong>&bull; Fall (Pin) / Forfeit / Default / Disqualification:</strong> <strong>6 points</strong><br/>'
-        '<strong>&bull; Technical Fall (TF):</strong> <strong>5 points</strong> &mdash; <em>Win by <strong>15 or more points</strong> (match stops)</em><br/>'
-        '<strong>&bull; Major Decision (MD):</strong> <strong>4 points</strong> &mdash; <em>Win by <strong>8 to 14 point spread</strong> (e.g., 10&ndash;2, 12&ndash;1, 9&ndash;0)</em><br/>'
-        '<strong>&bull; Decision (DEC):</strong> <strong>3 points</strong> &mdash; <em>Win by <strong>1 to 7 point spread</strong> (e.g., 5&ndash;3, 7&ndash;1, 4&ndash;2)</em><br/>'
-        '<div class="criteria-note">'
-        '<strong>* POINT SPREAD RULE:</strong> If victory margin is <strong>1&ndash;7 pts</strong> = <strong>Decision (3 pts)</strong>. '
-        'If victory margin is <strong>8&ndash;14 pts</strong> = <strong>Major Decision (4 pts)</strong>. '
-        'Record activity points in the <strong>TIEBREAKER / PTS</strong> column after each bout.'
-        '</div>'
-        '</td>'
-        '</tr></tbody>'
-        '</table>'
-        '</div>'
+        '<div class="crit-line"><strong>&bull; Fall / Forfeit / Default / DQ:</strong> <strong>6 points</strong></div>'
+        '<div class="crit-line"><strong>&bull; Technical Fall (TF):</strong> <strong>5 points</strong> &mdash; <em>Win by <strong>15+ match points</strong></em></div>'
+        '<div class="crit-line"><strong>&bull; Major Decision (MD):</strong> <strong>4 points</strong> &mdash; <em>Win by <strong>8 to 14 pt spread</strong> (e.g. 10&ndash;2, 9&ndash;1)</em></div>'
+        '<div class="crit-line"><strong>&bull; Decision (DEC):</strong> <strong>3 points</strong> &mdash; <em>Win by <strong>1 to 7 pt spread</strong> (e.g. 5&ndash;2, 7&ndash;1, 4&ndash;3)</em></div>'
+        '<div class="crit-note"><em>* Point spread rule: 1&ndash;7 pts = DEC (3 pts) &bull; 8&ndash;14 pts = MD (4 pts) &bull; 15+ pts = TF (5 pts).</em></div>'
+        "</td>"
+        "</tr></tbody>"
+        "</table>"
+        "</div>"
     )
 
     return "\n".join(parts)
 
 
-def render_single_bracket_preview_html(group: BracketGroup) -> str:
+def render_single_bracket_preview_html(
+    group: BracketGroup,
+    tournament_name: str = "Wrestling Tournament",
+    tournament_date: str = "",
+) -> str:
     """Return a self-styled HTML snippet for rendering a single bracket sheet inside Streamlit."""
-    body = _render_bout_and_tally_sheet(group)
+    body = _render_bout_and_tally_sheet(group, tournament_name=tournament_name, tournament_date=tournament_date)
     return f"""
     <style>
       .bm-preview-wrap {{
         font-family: Arial, Helvetica, sans-serif;
         color: #000;
         background: #fff;
-        padding: 10px;
+        padding: 8px 10px;
         border: 1.5px solid #000;
-        margin-top: 6px;
-        margin-bottom: 10px;
+        margin-top: 4px;
+        margin-bottom: 8px;
+        box-sizing: border-box;
+      }}
+      .bm-preview-wrap * {{ box-sizing: border-box; }}
+      .bm-preview-wrap .sheet-header {{
+        border-bottom: 1.5px solid #000;
+        padding-bottom: 4px;
+        margin-bottom: 6px;
+      }}
+      .bm-preview-wrap .header-top-row {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1.5px solid #000;
+        padding-bottom: 3px;
+        margin-bottom: 4px;
+      }}
+      .bm-preview-wrap .tourney-name {{
+        font-size: 14px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }}
+      .bm-preview-wrap .header-sep {{
+        margin: 0 6px;
+        font-size: 11px;
+      }}
+      .bm-preview-wrap .tourney-date {{
+        font-size: 12px;
+        font-weight: 700;
+      }}
+      .bm-preview-wrap .header-table-info {{
+        font-size: 11px;
+        font-weight: 700;
+      }}
+      .bm-preview-wrap .table-field {{
+        margin-left: 10px;
+      }}
+      .bm-preview-wrap .field-blank {{
+        display: inline-block;
+        border-bottom: 1.2px solid #000;
+        vertical-align: bottom;
+      }}
+      .bm-preview-wrap .mat-blank {{ width: 45px; }}
+      .bm-preview-wrap .scorer-blank {{ width: 75px; }}
+      .bm-preview-wrap .header-meta-row {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        font-size: 10.5px;
+      }}
+      .bm-preview-wrap .meta-gid {{
+        background: #000;
+        color: #fff;
+        padding: 1px 5px;
+        font-weight: 800;
+        font-size: 11px;
+        border-radius: 2px;
+      }}
+      .bm-preview-wrap .meta-tag {{
+        padding: 1px 4px;
+        border: 1px solid #000;
+      }}
+      .bm-preview-wrap .meta-wt {{
+        font-weight: 600;
       }}
       .bm-preview-wrap .bout-score-table,
       .bm-preview-wrap .tally-table,
+      .bm-preview-wrap .awards-table,
       .bm-preview-wrap .criteria-table {{
         width: 100%;
         border-collapse: collapse;
-        border: 2px solid #000;
+        border: 1.5px solid #000;
         background: #fff;
-        margin-bottom: 10px;
-      }}
-      .bm-preview-wrap .criteria-cell {{
-        vertical-align: top;
-        font-size: 11px;
-        line-height: 1.45;
-        padding: 6px 8px;
-        height: auto;
-      }}
-      .bm-preview-wrap .col-crit-half {{ width: 50%; }}
-      .bm-preview-wrap .criteria-note {{
-        font-size: 10.5px;
+        margin-bottom: 6px;
       }}
       .bm-preview-wrap th {{
-        border: 1.5px solid #000;
-        border-bottom: 2px solid #000;
+        border: 1px solid #000;
+        border-bottom: 1.5px solid #000;
         background: #fff !important;
         color: #000 !important;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
         text-align: center;
-        padding: 4px 4px;
+        padding: 3px 2px;
         line-height: 1.15;
       }}
       .bm-preview-wrap td {{
         border: 1px solid #000;
         background: #fff !important;
         color: #000 !important;
-        font-size: 12px;
-        padding: 5px 6px;
-        height: 28px;
+        font-size: 11px;
+        padding: 3px 4px;
+        height: 22px;
       }}
       .bm-preview-wrap tr.bout-row-bottom td {{
-        border-bottom: 2.2px solid #000;
+        border-bottom: 2px solid #000;
       }}
       .bm-preview-wrap .col-bout {{ width: 5%; }}
       .bm-preview-wrap .col-wt {{ width: 6%; }}
@@ -252,11 +374,84 @@ def render_single_bracket_preview_html(group: BracketGroup) -> str:
         font-weight: 600;
       }}
       .bm-preview-wrap .tally-title {{
-        font-size: 11px;
-        font-weight: 700;
-        margin-bottom: 4px;
+        font-size: 10.5px;
+        font-weight: 800;
+        margin-bottom: 2px;
+        letter-spacing: 0.04em;
         color: #000;
       }}
+      .bm-preview-wrap .col-seed {{ width: 4%; }}
+      .bm-preview-wrap .col-tally-name {{ width: 26%; }}
+      .bm-preview-wrap .col-club {{ width: 18%; }}
+      .bm-preview-wrap .col-wl {{ width: 13%; }}
+      .bm-preview-wrap .col-tb {{ width: 16%; }}
+      .bm-preview-wrap .col-place {{ width: 10%; }}
+
+      .bm-preview-wrap .awards-section {{
+        border: 1.5px solid #000;
+        padding: 3px 6px;
+        margin-bottom: 6px;
+        background: #fff;
+      }}
+      .bm-preview-wrap .awards-title {{
+        font-size: 10px;
+        font-weight: 800;
+        margin-bottom: 3px;
+        letter-spacing: 0.03em;
+      }}
+      .bm-preview-wrap .awards-table {{
+        margin-bottom: 0;
+        border: none;
+      }}
+      .bm-preview-wrap .awards-table td {{
+        border: none;
+        padding: 2px 4px;
+        height: 18px;
+        font-size: 10.5px;
+      }}
+      .bm-preview-wrap .award-place {{
+        font-weight: 800;
+        display: inline-block;
+        min-width: 68px;
+      }}
+      .bm-preview-wrap .award-name-line {{
+        display: inline-block;
+        border-bottom: 1.2px solid #000;
+        width: 48%;
+        height: 14px;
+        vertical-align: bottom;
+        margin-right: 4px;
+      }}
+      .bm-preview-wrap .award-club-lbl {{
+        font-weight: 700;
+        font-size: 9.5px;
+      }}
+      .bm-preview-wrap .award-club-line {{
+        display: inline-block;
+        border-bottom: 1.2px solid #000;
+        width: 25%;
+        height: 14px;
+        vertical-align: bottom;
+      }}
+
+      .bm-preview-wrap .criteria-table {{
+        margin-bottom: 0;
+      }}
+      .bm-preview-wrap .criteria-table th {{
+        text-align: left;
+        padding: 2px 4px;
+        font-size: 9px;
+      }}
+      .bm-preview-wrap .criteria-cell {{
+        vertical-align: top;
+        font-size: 9px;
+        line-height: 1.25;
+        padding: 2px 4px;
+        height: auto;
+      }}
+      .bm-preview-wrap .col-crit-half {{ width: 50%; }}
+      .bm-preview-wrap .crit-line {{ margin-bottom: 1px; }}
+      .bm-preview-wrap .crit-note {{ font-size: 8.5px; margin-top: 1px; }}
     </style>
     <div class="bm-preview-wrap">
       {body}
@@ -268,10 +463,12 @@ def export_printable_html(
     result: TournamentResult,
     output_path: str | Path,
     tournament_name: str = "Wrestling Tournament",
+    tournament_date: str = "",
 ) -> Path:
     """Generate a self-contained printable HTML file with unshaded bout score sheets and W/L tally areas."""
     out_path = Path(output_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    date_display = tournament_date or datetime.now().strftime("%B %d, %Y")
 
     divisions = sorted({g.division for g in result.groups})
     age_groups = list(dict.fromkeys(g.age_group for g in result.groups))
@@ -290,7 +487,7 @@ def export_printable_html(
                 )
             flags_html = f'<div class="flags-box no-print">{"".join(items)}</div>'
 
-        body_html = _render_bout_and_tally_sheet(g)
+        body_html = _render_bout_and_tally_sheet(g, tournament_name=tournament_name, tournament_date=date_display)
 
         card = f"""
         <section class="bracket-sheet"
@@ -298,16 +495,6 @@ def export_printable_html(
                  data-age="{escape(g.age_group)}"
                  data-skill="{escape(g.skill_level)}"
                  data-flagged="{'true' if g.has_warnings else 'false'}">
-          <header class="sheet-header">
-            <div class="header-left">
-              <h2>{escape(g.group_id)} &mdash; {escape(g.division)} {escape(g.age_group)} ({escape(g.skill_level)})</h2>
-              <div class="sheet-sub">{escape(tournament_name)} &bull; Weights: <strong>{escape(g.weight_label)}</strong> (Spread: {g.weight_spread_lbs:g} lbs / {g.weight_spread_pct:.1f}%)</div>
-            </div>
-            <div class="header-right">
-              <div><strong>MAT #:</strong> ____________</div>
-              <div><strong>TABLE:</strong> ____________</div>
-            </div>
-          </header>
           {flags_html}
           {body_html}
         </section>
@@ -325,36 +512,40 @@ def export_printable_html(
   <title>{escape(tournament_name)} - Printable Brackets</title>
   <style>
     * {{ box-sizing: border-box; }}
+    @page {{
+      size: letter portrait;
+      margin: 0.25in 0.3in;
+    }}
     body {{
       font-family: Arial, Helvetica, sans-serif;
       color: #000;
       margin: 0;
-      padding: 16px;
+      padding: 12px;
       background: #fff;
     }}
     .toolbar {{
       background: #fff;
       border: 1.5px solid #000;
-      padding: 10px 14px;
-      margin-bottom: 20px;
+      padding: 8px 12px;
+      margin-bottom: 16px;
       display: flex;
       flex-wrap: wrap;
-      gap: 14px;
+      gap: 12px;
       align-items: center;
       justify-content: space-between;
-      max-width: 1000px;
+      max-width: 960px;
       margin-left: auto;
       margin-right: auto;
     }}
     .toolbar-filters {{
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
     }}
     .toolbar select, .toolbar button {{
-      padding: 5px 10px;
-      font-size: 13px;
+      padding: 4px 8px;
+      font-size: 12px;
       border: 1px solid #000;
       background: #fff;
       color: #000;
@@ -366,66 +557,114 @@ def export_printable_html(
     }}
     .bracket-sheet {{
       background: #fff;
-      border: 2px solid #000;
-      padding: 18px;
-      margin-bottom: 28px;
-      max-width: 1000px;
+      border: 1.5px solid #000;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      max-width: 960px;
       margin-left: auto;
       margin-right: auto;
+      box-sizing: border-box;
     }}
     .sheet-header {{
+      border-bottom: 1.5px solid #000;
+      padding-bottom: 4px;
+      margin-bottom: 6px;
+    }}
+    .header-top-row {{
       display: flex;
       justify-content: space-between;
-      align-items: flex-end;
-      border-bottom: 2px solid #000;
-      padding-bottom: 8px;
-      margin-bottom: 14px;
+      align-items: center;
+      border-bottom: 1.5px solid #000;
+      padding-bottom: 3px;
+      margin-bottom: 4px;
     }}
-    .sheet-header h2 {{
-      margin: 0 0 4px 0;
-      font-size: 18px;
+    .tourney-name {{
+      font-size: 15px;
+      font-weight: 800;
+      text-transform: uppercase;
       letter-spacing: 0.02em;
     }}
-    .sheet-sub {{
-      font-size: 13px;
+    .header-sep {{
+      margin: 0 8px;
+      font-size: 12px;
     }}
-    .header-right {{
-      text-align: right;
+    .tourney-date {{
       font-size: 13px;
-      line-height: 1.7;
+      font-weight: 700;
+      color: #111;
+    }}
+    .header-table-info {{
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .table-field {{
+      margin-left: 12px;
+    }}
+    .field-blank {{
+      display: inline-block;
+      border-bottom: 1.5px solid #000;
+      vertical-align: bottom;
+    }}
+    .mat-blank {{ width: 50px; }}
+    .scorer-blank {{ width: 85px; }}
+
+    .header-meta-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      font-size: 11px;
+    }}
+    .meta-gid {{
+      background: #000;
+      color: #fff;
+      padding: 2px 6px;
+      font-weight: 800;
+      font-size: 11.5px;
+      border-radius: 2px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }}
+    .meta-tag {{
+      padding: 1px 5px;
+      border: 1px solid #000;
+      background: #fff;
+    }}
+    .meta-wt {{
+      font-weight: 600;
     }}
 
     /* Main Bout Score Table — Unshaded, Crisp Black Borders */
     .bout-score-table {{
       width: 100%;
       border-collapse: collapse;
-      border: 2px solid #000;
-      margin-bottom: 18px;
+      border: 1.5px solid #000;
+      margin-bottom: 6px;
       background: #fff;
     }}
     .bout-score-table th {{
-      border: 1.5px solid #000;
-      border-bottom: 2px solid #000;
+      border: 1px solid #000;
+      border-bottom: 1.5px solid #000;
       background: #fff;
       color: #000;
-      font-size: 12px;
+      font-size: 10.5px;
       font-weight: 700;
       text-align: center;
-      padding: 6px 4px;
+      padding: 3px 2px;
       line-height: 1.15;
     }}
     .bout-score-table td {{
       border: 1px solid #000;
       background: #fff;
       color: #000;
-      font-size: 13px;
-      padding: 6px 6px;
-      height: 34px;
+      font-size: 11px;
+      padding: 3px 5px;
+      height: 22px;
       vertical-align: middle;
     }}
     /* Thick divider line between each 2-row bout pair so no shading is needed */
     .bout-score-table tr.bout-row-bottom td {{
-      border-bottom: 2.2px solid #000;
+      border-bottom: 2px solid #000;
     }}
     .col-bout {{ width: 5%; }}
     .col-wt {{ width: 6%; }}
@@ -434,13 +673,13 @@ def export_printable_html(
     .col-pts {{ width: 4.3%; }}
 
     .th-bout, .th-pts {{
-      font-size: 11px;
-      padding: 4px 2px;
+      font-size: 9.5px;
+      padding: 2px 1px;
     }}
     .cell-bout {{
       text-align: center;
       font-weight: 700;
-      font-size: 13px;
+      font-size: 11.5px;
     }}
     .cell-wt {{
       text-align: center;
@@ -455,37 +694,37 @@ def export_printable_html(
 
     /* Wrestler Win / Loss Tally Table */
     .tally-section {{
-      margin-top: 10px;
+      margin-bottom: 6px;
     }}
     .tally-title {{
-      font-size: 12px;
-      font-weight: 700;
+      font-size: 10.5px;
+      font-weight: 800;
       letter-spacing: 0.04em;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }}
     .tally-table {{
       width: 100%;
       border-collapse: collapse;
-      border: 2px solid #000;
+      border: 1.5px solid #000;
       background: #fff;
     }}
     .tally-table th {{
-      border: 1.5px solid #000;
-      border-bottom: 2px solid #000;
+      border: 1px solid #000;
+      border-bottom: 1.5px solid #000;
       background: #fff;
       color: #000;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       text-align: center;
-      padding: 5px 6px;
+      padding: 3px 3px;
     }}
     .tally-table td {{
       border: 1px solid #000;
       background: #fff;
       color: #000;
-      font-size: 13px;
-      padding: 6px 8px;
-      height: 32px;
+      font-size: 11px;
+      padding: 3px 6px;
+      height: 22px;
     }}
     .col-seed {{ width: 4%; }}
     .col-tally-name {{ width: 26%; }}
@@ -498,61 +737,125 @@ def export_printable_html(
       font-weight: 700;
     }}
 
-    /* Round-Robin Tie-Breaker & Activity Points Section */
+    /* Official Placement & Awards Section (Championship Keep-Sheet) */
+    .awards-section {{
+      border: 1.5px solid #000;
+      padding: 4px 8px;
+      margin-bottom: 6px;
+      background: #fff;
+    }}
+    .awards-title {{
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      margin-bottom: 3px;
+    }}
+    .awards-table {{
+      width: 100%;
+      border-collapse: collapse;
+      border: none;
+      background: #fff;
+    }}
+    .awards-table td {{
+      border: none;
+      padding: 2px 4px;
+      height: 20px;
+      font-size: 11px;
+      vertical-align: middle;
+    }}
+    .col-award {{ width: 50%; }}
+    .award-place {{
+      font-weight: 800;
+      display: inline-block;
+      min-width: 72px;
+    }}
+    .award-name-line {{
+      display: inline-block;
+      border-bottom: 1.2px solid #000;
+      width: 52%;
+      height: 15px;
+      vertical-align: bottom;
+      margin-right: 6px;
+    }}
+    .award-club-lbl {{
+      font-weight: 700;
+      font-size: 10px;
+    }}
+    .award-club-line {{
+      display: inline-block;
+      border-bottom: 1.2px solid #000;
+      width: 25%;
+      height: 15px;
+      vertical-align: bottom;
+    }}
+
+    /* Condensed Round-Robin Tie-Breaker & Activity Points Section */
     .criteria-section {{
-      margin-top: 14px;
+      margin-bottom: 0;
     }}
     .criteria-table {{
       width: 100%;
       border-collapse: collapse;
-      border: 2px solid #000;
+      border: 1.5px solid #000;
       background: #fff;
     }}
     .criteria-table th {{
-      border: 1.5px solid #000;
-      border-bottom: 2px solid #000;
+      border: 1px solid #000;
+      border-bottom: 1.5px solid #000;
       background: #fff;
       color: #000;
-      font-size: 11px;
+      font-size: 9.5px;
       font-weight: 700;
       text-align: left;
-      padding: 5px 8px;
+      padding: 3px 6px;
     }}
     .criteria-table td.criteria-cell {{
       border: 1px solid #000;
       background: #fff;
       color: #000;
-      font-size: 11.5px;
-      line-height: 1.45;
-      padding: 6px 8px;
+      font-size: 9.5px;
+      line-height: 1.25;
+      padding: 3px 6px;
       vertical-align: top;
       height: auto;
     }}
     .col-crit-half {{ width: 50%; }}
-    .criteria-note {{
-      display: inline-block;
-      margin-top: 4px;
-      font-size: 10.5px;
+    .crit-line {{ margin-bottom: 1.5px; }}
+    .crit-note {{
+      font-size: 9px;
+      margin-top: 1.5px;
       color: #222;
     }}
 
     .flags-box {{
-      margin-bottom: 10px;
-      padding: 6px 10px;
+      margin-bottom: 6px;
+      padding: 4px 8px;
       border: 1px dashed #000;
       background: #fff;
-      font-size: 12px;
+      font-size: 11px;
     }}
 
     @media print {{
-      body {{ background: #fff; padding: 0; }}
+      body {{
+        background: #fff;
+        padding: 0;
+        margin: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }}
       .no-print, .toolbar {{ display: none !important; }}
       .bracket-sheet {{
         border: none;
         margin: 0;
-        padding: 4px 0;
+        padding: 0;
         page-break-inside: avoid;
         page-break-after: always;
+        page-break-before: auto;
+        height: 10.45in;
+        max-height: 10.45in;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
       }}
     }}
   </style>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import re
 import tempfile
 from pathlib import Path
@@ -394,8 +395,12 @@ def _render_explorer_tab(tournament: SavedTournament) -> None:
                                 st.error(str(exc))
 
             bout_count = len(g.bouts) if g.bouts else 1
-            card_height = max(440, 370 + bout_count * 70 + g.size * 34)
-            components.html(render_single_bracket_preview_html(g), height=card_height, scrolling=False)
+            card_height = max(520, 440 + bout_count * 52 + g.size * 26)
+            components.html(
+                render_single_bracket_preview_html(g, tournament_name=tournament.name),
+                height=card_height,
+                scrolling=False,
+            )
 
             with st.expander(f"❌ Scratch a No-Show from {g.group_id}", expanded=False):
                 w_scratch_opts = {w.id: f"{w.name} ({w.weight:g} lbs, {w.display_team})" for w in g.wrestlers}
@@ -850,6 +855,21 @@ def _render_print_and_export_tab(tournament: SavedTournament) -> None:
 
     st.subheader("🖨️ Print & Export Tournament Brackets")
 
+    hdr_c1, hdr_c2 = st.columns([2, 1])
+    with hdr_c1:
+        custom_pr_name = st.text_input(
+            "Tournament Name on Print Header",
+            value=tournament.name,
+            key="pr_custom_name",
+        )
+    with hdr_c2:
+        default_pr_date = datetime.now().strftime("%B %d, %Y")
+        custom_pr_date = st.text_input(
+            "Tournament Date on Print Header",
+            value=default_pr_date,
+            key="pr_custom_date",
+        )
+
     p1, p2, p3, p4 = st.columns(4)
     divs = ["All"] + list(dict.fromkeys(g.division for g in groups))
     ages = ["All"] + list(dict.fromkeys(g.age_group for g in groups))
@@ -894,7 +914,8 @@ def _render_print_and_export_tab(tournament: SavedTournament) -> None:
     html_path = export_printable_html(
         filtered_result,
         export_dir / "brackets.html",
-        tournament_name=tournament.name,
+        tournament_name=custom_pr_name.strip() or tournament.name,
+        tournament_date=custom_pr_date.strip(),
     )
     xlsx_path = export_xlsx_workbook(filtered_result, export_dir / "brackets_workbook.xlsx")
     csv_paths = export_csv_files(filtered_result, export_dir)

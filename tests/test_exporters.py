@@ -37,9 +37,22 @@ def test_exporters_create_valid_outputs(tmp_path: Path):
     assert "Summary" in sheet_names
     assert "Coed_6U" in sheet_names
 
-    html_path = export_printable_html(result, tmp_path / "brackets.html")
+    html_path = export_printable_html(
+        result,
+        tmp_path / "brackets.html",
+        tournament_name="SSWL Qualifier",
+        tournament_date="October 25, 2026",
+    )
     assert html_path.exists()
     html_text = html_path.read_text(encoding="utf-8")
     assert "COED-6U-BEG-01" in html_text
+    assert "SSWL Qualifier" in html_text
+    assert "October 25, 2026" in html_text
+    assert "AGE GROUP:" in html_text
+    assert "EXPERIENCE:" in html_text
+    assert "WEIGHTS:" in html_text
     assert "1<sup>ST</sup> PERIOD" in html_text
     assert "WRESTLER WIN / LOSS TALLY" in html_text
+    assert "OFFICIAL BRACKET PLACEMENT &amp; AWARDS" in html_text
+    assert "1ST PLACE:" in html_text
+    assert "ROUND-ROBIN TIE-BREAKER CRITERIA" in html_text
