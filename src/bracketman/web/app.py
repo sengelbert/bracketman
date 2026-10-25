@@ -418,6 +418,7 @@ def _render_tweak_and_regenerate_tab(tournament: SavedTournament) -> None:
         st.info("No brackets available yet. Import a spreadsheet first.")
         return
 
+    cfg = tournament.config
     all_gids = [g.group_id for g in groups]
     gid_map = {g.group_id: g for g in groups}
 
