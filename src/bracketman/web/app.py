@@ -867,19 +867,13 @@ def main() -> None:
     )
 
     active = _render_sidebar()
-    banner_path = Path("assets/banner.jpg")
 
     if active is None:
-        if banner_path.exists():
-            st.image(str(banner_path), use_container_width=True)
         st.title("Welcome to Bracketman")
         st.markdown(
             "Create your first tournament in the sidebar on the left and paste your Google Sheet link to build brackets!"
         )
         return
-
-    if banner_path.exists():
-        st.image(str(banner_path), use_container_width=True)
 
     st.title(active.name)
     if active.sheet_url:
