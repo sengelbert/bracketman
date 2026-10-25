@@ -125,37 +125,47 @@ bracketman --help
 ### Option A: Launch the Streamlit Web UI
 
 ```bash
-# Launch on default port 8503
+# Launch (listens on 0.0.0.0 so both localhost and local Wi-Fi can connect)
 bracketman ui
 
-# Or specify a custom port:
-bracketman ui --port 8503
+# Or specify a custom port or localhost-only:
+bracketman ui --port 8503 --host 127.0.0.1
 ```
 
-Open your web browser and navigate to:
+Streamlit will print the URLs directly to your terminal:
 ```
-http://localhost:8503
-```
-
-### Option B: Access from Other Laptops or Tablets on LAN / Mat-side Wi-Fi
-
-To allow table workers or coaches on other computers to access Bracketman on the local network, bind to `0.0.0.0`:
-
-```bash
-source .venv/bin/activate
-streamlit run src/bracketman/web/app.py --server.port 8503 --server.address 0.0.0.0
+  Local URL:   http://localhost:8503
+  Network URL: http://192.168.1.50:8503
 ```
 
-If your Linux machine has an active firewall (such as `ufw` on Ubuntu):
-```bash
-sudo ufw allow 8503/tcp
-```
+---
 
-Other computers on the same Wi-Fi or router can now open:
-```
-http://<LINUX-MACHINE-IP>:8503
-```
-*(Run `hostname -I` or `ip a` on the host machine to find its local IP address).*
+### Option B: Access from Other Laptops or Tablets on LAN / Gym Wi-Fi
+
+`bracketman ui` binds to `0.0.0.0` by default, meaning any computer, iPad, or phone connected to the same Wi-Fi network can open the UI.
+
+1. **Find your Linux laptop's IP address**:
+   ```bash
+   hostname -I
+   # or: ip -br a
+   ```
+   *(For example: `192.168.1.50`)*
+
+2. **Open firewall port on Linux (if active)**:
+   ```bash
+   sudo ufw allow 8503/tcp
+   ```
+
+3. **Open browser on table tablets / laptops**:
+   ```
+   http://192.168.1.50:8503
+   ```
+
+> [!IMPORTANT]
+> **School Gym Wi-Fi Warning ("Client Isolation")**:
+> Many public school guest Wi-Fi networks enable **Client Isolation** (a security feature that prevents connected devices from communicating directly with each other). If table workers cannot reach your laptop's IP on school guest Wi-Fi:
+> 1. **Best Practice &mdash; Portable Travel Router / Hotspot**: Bring a portable pocket travel router (e.g. TP-Link or GL.iNet) or turn on your phone's personal hotspot. Connect your Linux laptop and scoring tablets to this dedicated Wi-Fi network. Because it is completely local, it bypasses school restrictions, has zero client isolation, and works 100% offline with no internet needed!
+> 2. **School Staff / Ethernet Network**: If available, plugging your laptop and scoring tables into a simple 5-port network switch or staff network typically has client isolation turned off.
 
 ---
 

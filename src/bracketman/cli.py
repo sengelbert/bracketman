@@ -271,12 +271,28 @@ def reoptimize_cmd(
 
 
 @main.command("ui")
+@click.option(
+    "--host",
+    default="0.0.0.0",
+    show_default=True,
+    help="Network address to bind to ('0.0.0.0' allows other computers on the LAN/Wi-Fi to connect).",
+)
 @click.option("--port", default=8503, show_default=True, help="Port to run the Streamlit UI on.")
 @click.option("--headless", is_flag=True, help="Run Streamlit in headless mode.")
-def ui_cmd(port: int, headless: bool) -> None:
+def ui_cmd(host: str, port: int, headless: bool) -> None:
     """Launch the interactive Bracketman Streamlit web application."""
     app_path = Path(__file__).resolve().parent / "web" / "app.py"
-    cmd = [sys.executable, "-m", "streamlit", "run", str(app_path), "--server.port", str(port)]
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(app_path),
+        "--server.address",
+        str(host),
+        "--server.port",
+        str(port),
+    ]
     if headless:
         cmd.extend(["--server.headless", "true"])
     subprocess.run(cmd, check=True)
