@@ -272,15 +272,25 @@ def reoptimize_cmd(
 
 @main.command("ui")
 @click.option(
+    "--lan",
+    is_flag=True,
+    help="Allow other devices on your home LAN/Wi-Fi to connect (binds to 0.0.0.0). By default, Bracketman runs in secure local-only mode (127.0.0.1).",
+)
+@click.option(
     "--host",
-    default="0.0.0.0",
-    show_default=True,
-    help="Network address to bind to ('0.0.0.0' allows other computers on the LAN/Wi-Fi to connect).",
+    default=None,
+    help="Custom network address to bind to (defaults to 127.0.0.1 for local-only security, or 0.0.0.0 if --lan is passed).",
 )
 @click.option("--port", default=8503, show_default=True, help="Port to run the Streamlit UI on.")
 @click.option("--headless", is_flag=True, help="Run Streamlit in headless mode.")
-def ui_cmd(host: str, port: int, headless: bool) -> None:
+def ui_cmd(lan: bool, host: str | None, port: int, headless: bool) -> None:
     """Launch the interactive Bracketman Streamlit web application."""
+    bind_host = host if host is not None else ("0.0.0.0" if lan else "127.0.0.1")
+    if bind_host == "127.0.0.1":
+        click.echo("🔒 Running in Secure Local-Only Mode (only accessible on this machine).")
+    else:
+        click.echo("🌐 Running in LAN Mode (accessible to devices on your local Wi-Fi/network).")
+
     app_path = Path(__file__).resolve().parent / "web" / "app.py"
     cmd = [
         sys.executable,
@@ -289,7 +299,7 @@ def ui_cmd(host: str, port: int, headless: bool) -> None:
         "run",
         str(app_path),
         "--server.address",
-        str(host),
+        str(bind_host),
         "--server.port",
         str(port),
     ]

@@ -122,50 +122,42 @@ bracketman --help
 
 ## Running Bracketman
 
-### Option A: Launch the Streamlit Web UI
+### Option A: Launch the Streamlit Web UI (Secure Local-Only Mode &mdash; Default)
+
+By default, Bracketman runs in **Secure Local-Only Mode** (bound to `127.0.0.1`). This ensures that even when your laptop is connected to a public high school gym Wi-Fi, **no one else on the network can connect or make unauthorized changes**:
 
 ```bash
-# Launch (listens on 0.0.0.0 so both localhost and local Wi-Fi can connect)
+# Secure local-only mode (default, for tournaments/on-site)
 bracketman ui
-
-# Or specify a custom port or localhost-only:
-bracketman ui --port 8503 --host 127.0.0.1
 ```
 
-Streamlit will print the URLs directly to your terminal:
+Only the web browser on your own laptop can access `http://localhost:8503`.
+
+---
+
+### Option B: Home LAN Mode (Access from Other Devices at Home)
+
+When you are at home and want to access Bracketman from another computer, iPad, or laptop on your private home network:
+
+```bash
+# Pass --lan to listen on 0.0.0.0
+bracketman ui --lan
+
+# (Optionally specify a custom port):
+bracketman ui --lan --port 8503
+```
+
+Streamlit will print your home network URL:
 ```
   Local URL:   http://localhost:8503
   Network URL: http://192.168.1.50:8503
 ```
 
----
-
-### Option B: Access from Other Laptops or Tablets on LAN / Gym Wi-Fi
-
-`bracketman ui` binds to `0.0.0.0` by default, meaning any computer, iPad, or phone connected to the same Wi-Fi network can open the UI.
-
-1. **Find your Linux laptop's IP address**:
-   ```bash
-   hostname -I
-   # or: ip -br a
-   ```
-   *(For example: `192.168.1.50`)*
-
-2. **Open firewall port on Linux (if active)**:
-   ```bash
-   sudo ufw allow 8503/tcp
-   ```
-
-3. **Open browser on table tablets / laptops**:
-   ```
-   http://192.168.1.50:8503
-   ```
-
-> [!IMPORTANT]
-> **School Gym Wi-Fi Warning ("Client Isolation")**:
-> Many public school guest Wi-Fi networks enable **Client Isolation** (a security feature that prevents connected devices from communicating directly with each other). If table workers cannot reach your laptop's IP on school guest Wi-Fi:
-> 1. **Best Practice &mdash; Portable Travel Router / Hotspot**: Bring a portable pocket travel router (e.g. TP-Link or GL.iNet) or turn on your phone's personal hotspot. Connect your Linux laptop and scoring tablets to this dedicated Wi-Fi network. Because it is completely local, it bypasses school restrictions, has zero client isolation, and works 100% offline with no internet needed!
-> 2. **School Staff / Ethernet Network**: If available, plugging your laptop and scoring tables into a simple 5-port network switch or staff network typically has client isolation turned off.
+> [!TIP]
+> **Sharing Brackets with Table Workers Safely**:
+> To give scoring tables and coaches their bracket schedules without giving them edit access to the live software:
+> 1. Export the printable sheets from the **🖨️ Print & Export** tab.
+> 2. Print physical paper sheets, or save the unshaded brackets as PDF/HTML and share the static files. This keeps full administrative control strictly on your tournament laptop.
 
 ---
 
