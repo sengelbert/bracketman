@@ -83,6 +83,19 @@
   - Bottom Section: Condensed 2-column micro-reference table for tiebreakers and point spread criteria.
   - Print CSS enforcing `@page { size: letter portrait; margin: 0.25in 0.3in; }` and `.bracket-sheet { height: 10.45in; max-height: 10.45in; page-break-inside: avoid; page-break-after: always; }`.
 
+### Decision 9: Synthetic Demo Dataset & Privacy-Preserving Defaults
+- **Context**: Real youth wrestlers' names, weights, and league identities must never be exposed or committed to public example documentation.
+- **Decision**:
+  - Built `scripts/generate_example_tournament.py` generating 290 synthetic youth wrestlers across 8 fictionalized club tabs with realistic age-weight curves, beginner/advanced tiers, and dual entries.
+  - Stored in `data/example_tournament.xlsx`.
+  - Configured `src/bracketman/web/app.py` to auto-initialize `Example Tournament` if local store is empty, ensuring zero exposure of private league data.
+
+### Decision 10: Automated Documentation Visuals & Headless Selenium Capture
+- **Context**: Coaches, table workers, and league directors require clear visual previews of all tabs and score sheets in the project documentation.
+- **Decision**:
+  - Created `scripts/take_screenshots.py` using Selenium and headless Firefox to capture all 5 Streamlit tabs and the printable bracket HTML directly into `docs/images/`.
+  - Embedded high-resolution screenshots into `README.md` alongside comprehensive walkthroughs of all features.
+
 ---
 
 ## 3. Repository Structure

@@ -1,186 +1,239 @@
-# Bracketman 🚀🤼
+<div align="center">
 
-A modern wrestling tournament manager, grouping engine, and printable bracket generator built in Python and Streamlit.
+![Bracketman Banner](assets/banner.jpg)
 
-Bracketman reads multi-tab wrestling team rosters directly from Google Spreadsheets (or local `.xlsx` / `.csv` files), normalizes divisions (`Coed` and `Girls`), age groups (`4U`, `6U`, `8U`, `10U`, `12U`, `15U` with `14U` aliased into `15U`), and skill levels (`Beginner` / `Advanced`), and builds optimal **Madison weight groups** (target size: 4) using dynamic programming with progressive weight spread scaling, teammate separation, and unshaded printable mat table score sheets.
+# Bracketman
 
----
+**Modern Youth Wrestling Tournament Manager, Madison Grouping Engine & Printable Bracket Generator**
 
-## Features
+[![Tests](https://img.shields.io/badge/tests-13%20passed%20100%25-brightgreen.svg)]()
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- **Interactive Streamlit Web Application (`bracketman ui`)**:
-  - **Multi-Tournament Persistence**: Tournaments are stored automatically in `data/tournaments/<slug>/tournament.json` across crashes and reboots.
-  - **Google Sheet Sync**: Connect a Google Spreadsheet link; sync with **Full Overwrite** or **Preserve Locked Brackets**.
-  - **Live Walk-Ins & Scratches**:
-    - Add unannounced walk-ins with intelligent bracket suitability scoring (weight spread %, teammate presence, and pod size).
-    - Scratch no-show wrestlers from single brackets or dual-entry divisions with 1-click restore.
-  - **Rethink & Re-Optimize Active Brackets**:
-    - Re-run the Madison dynamic programming engine over all active (walk-ins included, scratches excluded) wrestlers across a specific division/age group or the entire tournament.
-    - Targeted bracket regeneration by Bracket IDs (e.g., `COED-8U-BEG-01, COED-8U-BEG-02`) with optional rule overrides or cross-skill pooling.
-  - **Manual Mat-side Tweaks**:
-    - Move wrestlers between brackets or spin off new pods.
-    - Swap wrestlers between brackets with one click.
-    - Merge straggler brackets directly from built-in advisor prompts.
-    - Edit scale check-in weights, wrestler names, or clubs on the fly.
-    - Lock/unlock brackets.
-  - **Printable Mat Table Score Sheets**:
-    - Unshaded 3-period score sheets (`BOUT | WT | WRESTLERS NAME | 1ST PERIOD | PTS | 2ND PERIOD | PTS | 3RD PERIOD | PTS`).
-    - Wrestler Win/Loss tally tables and explicit Round Robin tiebreaker criteria & activity points breakdown (DEC 1–7 pts vs MD 8–14 pts vs TF 15+ pts).
-    - Multi-tab Excel workbooks (`.xlsx`), CSV files, and printable HTML.
+</div>
 
 ---
 
-## Linux Installation Guide
+## Overview
 
-Follow these steps to install and run Bracketman on any Linux computer (Ubuntu, Debian, Fedora, RHEL, Arch, openSUSE).
+**Bracketman** is a lightweight, local-first wrestling tournament software designed for youth wrestling leagues, tournament directors, head table operators, and coaches. 
 
-### 1. Install System Prerequisites
+Built with Python and Streamlit, Bracketman eliminates the tedious manual spreadsheets, last-minute check-in scramble, and mismatched round-robins by automating wrestler ingestion, Madison weight grouping, teammate separation, live check-in scratches/walk-ins, and generating crisp 1-page printable score sheets.
 
-Bracketman requires **Python 3.10+**, **Git**, and the Python `venv` module.
+### Why Coaches and Directors Love Bracketman
 
-#### Ubuntu / Debian / Linux Mint / Pop!_OS
+1. **Zero Cloud Lock-in / Works 100% Offline**: Runs locally on your laptop at the gym table. No internet connection is required during the tournament.
+2. **Secure Local-Only by Default**: Binds to `127.0.0.1` so uninvited devices on the gym Wi-Fi cannot connect or alter tournament brackets.
+3. **Automated Madison Weight Grouping**: Uses dynamic programming to partition wrestlers into optimal 4-person round-robin pods (target 4, acceptable 3–5) while strictly enforcing age-specific weight spread limits.
+4. **Teammate Separation**: Boundary-swap heuristics detect wrestlers from the same school or club and swap adjacent seeds to avoid teammates facing each other in round-robins.
+5. **Live Check-In Scratches & Walk-Ins**: Handle morning check-in changes in seconds. Scratch no-shows (with 1-click restore) and add walk-ins with intelligent pod fit scoring.
+6. **Clean, Unshaded 1-Page Printable Score Sheets**: High-contrast, black-and-white score sheets formatted specifically for table workers and awards. Fits cleanly on a single 8.5" x 11" sheet.
+
+---
+
+## Application Walkthrough & Features
+
+Bracketman features an intuitive tabbed interface designed for high-stress tournament environments:
+
+### 1. 🏆 Brackets Explorer
+
+Browse, inspect, and verify all brackets in real time. Use multi-select filters for Division (`Coed`, `Girls`), Age Group (`6U`, `8U`, `10U`, `12U`, `15U`), Skill Level (`Beginner`, `Advanced`), or text search for any wrestler or club.
+
+![Brackets Explorer](docs/images/01_brackets_explorer.png)
+
+- **Tournament Summary Metrics**: Instant visibility into total registered wrestlers, total brackets generated, flagged brackets (exceeding weight spread thresholds), and teammate conflicts.
+- **Bracket Cards**: Each pod displays wrestler seeds, actual scale weights, clubs, computed weight spread %, and full round-robin bout schedules (e.g. Bout 1: 1 vs 4, Bout 2: 2 vs 3).
+- **Visual Alert Badges**: Instantly highlights pods that need attention (e.g., solo stragglers or >10% weight spread).
+
+---
+
+### 2. 🛠️ Tweak & Regenerate by ID
+
+The nerve center for mat-side tournament day adjustments. Manage check-in walk-ins, scratches, bracket re-optimizations, and manual adjustments without ever editing a spreadsheet.
+
+![Tweak and Regenerate](docs/images/02_tweak_regenerate.png)
+
+- **❌ Scratch No-Show Wrestler**:
+  - Remove a no-show wrestler from an individual bracket or both divisions if dual-entered.
+  - Bout schedules automatically recalculate for remaining wrestlers.
+  - Scratch history is preserved with 1-click **Restore Wrestler** capability.
+- **➕ Add Walk-In Wrestler**:
+  - Enter wrestler name, exact scale weight, age group, and skill tier.
+  - The algorithm calculates a **Suitability Fit Score** across existing brackets based on weight spread %, teammate conflicts, and pod capacity, or allows spinning off an entirely new bracket.
+- **🔄 Refresh & Rethink Brackets**:
+  - **Scope-Wide Rethink**: Re-partition an entire age group (e.g., all `Coed 8U`) or the entire tournament over all active wrestlers while protecting locked brackets.
+  - **Targeted Selection by ID**: Select specific bracket IDs (e.g., `COED-8U-BEG-01` and `COED-8U-BEG-02`) to merge and rebuild just those pods after scratches.
+  - **Rule Overrides**: Optionally relax maximum weight spread limits or allow beginner/advanced cross-pooling for low-turnout age brackets.
+- **Manual Hand-Tweaks**:
+  - **Move Wrestler**: Shift a wrestler into an adjacent pod or spin them into a new bracket.
+  - **Swap Wrestlers**: 1-click trade between wrestlers across two brackets.
+  - **Merge Brackets**: Merge underfilled pods directly from built-in advisor prompts.
+  - **Edit Wrestler Details**: Correct typos, modify check-in scale weights, or reassign club affiliations on the fly.
+  - **Lock / Unlock**: Freeze finalized brackets so automated re-optimizations never touch them.
+
+---
+
+### 3. 📥 Sheet Import & Sync
+
+Ingest team rosters from Google Spreadsheets or local Excel/CSV files in seconds.
+
+![Sheet Import and Sync](docs/images/03_sheet_import.png)
+
+- **Google Sheet Link Support**: Paste any standard Google Sheet URL or key. Bracketman extracts the ID and fetches all public team tabs automatically.
+- **Preamble Header Detection**: Intelligently skips coaching instructions, disclaimers, or empty preamble rows at the top of sheets to find the actual table headers (`Wrestler Name`, `Weight`, `Age`, `Experience`, etc.).
+- **Dual-Entry Recognition**: Automatically detects wrestlers participating in both Beginner and Advanced tiers or Coed and Girls divisions.
+- **Sync Modes**:
+  - **Sync & Preserve**: Updates weights and adds new wrestlers while leaving your hand-tweaked and locked brackets completely untouched.
+  - **Full Overwrite**: Re-imports the entire roster from scratch and rebuilds all brackets fresh.
+
+---
+
+### 4. 🖨️ Print & Export
+
+Generate print-ready materials and export data for coaches, head tables, and league archives.
+
+![Print and Export](docs/images/04_print_export.png)
+
+- **Multi-Format Downloads**:
+  - **Printable HTML Sheets**: Standalone HTML document formatted for Chrome/Firefox print-to-PDF or direct paper printing.
+  - **Multi-Tab Excel Workbook (`.xlsx`)**: Formatted workbook containing separate sheets for master roster, division summaries, and bout tables.
+  - **CSV Export**: Flat file format for backup and database archiving.
+- **Interactive Live Preview**: Filter and inspect the exact print sheet directly in the UI before sending it to the printer.
+
+---
+
+### 5. 📜 Audit Log
+
+Complete accountability for head table staff and tournament directors.
+
+![Audit Log](docs/images/05_audit_log.png)
+
+- **Immutable Audit Trail**: Every scratch, walk-in, manual move, swap, weight edit, lock toggle, and re-optimization is logged with an exact timestamp.
+- **Dispute Resolution**: If a coach asks why a wrestler moved brackets or was scratched, consult the audit log for the exact action history.
+
+---
+
+### 6. 📄 Official 1-Page Printable Score Sheet
+
+Designed specifically based on official high school and youth wrestling tournament table requirements.
+
+![Printable Bracket Sheet](docs/images/06_printable_bracket_sheet.png)
+
+- **Header Section**: Prominent Tournament Name, Date, Division, Age Group, Experience Tier, Weight Range & Spread %, and a clear **`MAT #: _____`** fill line.
+- **🏆 Official Placement & Awards Box**: Cleanly positioned at the top of the sheet with fill lines for **1st Place, 2nd Place, 3rd Place, and 4th Place** awards presentation.
+- **Wrestler Win/Loss Tally Table**: Tracks Seed #, Scale Weight, Wrestler Name, School / Club, Wins, Losses, Tiebreaker / Points, and Final Place.
+- **Bout Score Table (Unshaded)**: Crisp, high-contrast black borders with distinct thick divider lines between bouts. No gray ink shading to waste printer toner. Columns for `1ST PERIOD`, `PTS`, `2ND PERIOD`, `PTS`, `3RD PERIOD`, and `PTS`.
+- **Round-Robin Tiebreaker & Activity Points Reference**: Complete table-side reference at the bottom explaining:
+  - 1. Win/Loss Record &bull; 2. Head-to-Head &bull; 3. Activity Points &bull; 4. Most Falls (Pins) &bull; 5. Tech Falls &bull; 6. Major Decisions &bull; 7. Total Match Pts.
+  - Scoring breakdown: Fall/Forfeit (6 pts), Tech Fall (5 pts, 15+ pt margin), Major Decision (4 pts, 8–14 pt margin), Decision (3 pts, 1–7 pt margin).
+- **Single Page Guarantee**: Engineered using `@page { size: letter portrait; margin: 0.25in 0.3in; }` and CSS flex containment to ensure every bracket fits onto exactly one sheet of paper without spilling over.
+
+---
+
+## Weight Grouping & Teammate Logic
+
+Bracketman implements a mathematically optimal Madison weight grouping pipeline:
+
+1. **Normalization**:
+   - Ages normalized to `4U`, `6U`, `8U`, `10U`, `12U`, and `15U` (`14U` aliased into `15U`).
+   - Divisions parsed into `Coed` or `Girls`.
+   - Experience classified into `Beginner` and `Advanced`.
+2. **Target Pod Size & Natural Clusters**:
+   - Target pod size is **4 wrestlers** (3 rounds, 6 bouts total).
+   - If division count requires flexibility, pods of 3 or 5 are created. Single-wrestler pods (stragglers) are strictly prevented.
+3. **Progressive Age-Scaled Weight Spread Limits**:
+   Younger wrestlers require tighter weight groupings than older wrestlers:
+   - **6U**: 5% max recommended weight spread
+   - **8U**: 7% max recommended weight spread
+   - **10U**: 8% max recommended weight spread
+   - **12U**: 10% max recommended weight spread
+   - **15U**: 12% max recommended weight spread
+4. **Boundary Swapping for Teammate Separation**:
+   - If two wrestlers from the same school/club land in the same 4-man pod, Bracketman tests swapping boundary seeds with adjacent pods to separate teammates without violating weight limits.
+5. **Cross-Skill Merging Advisor**:
+   - When a solitary beginner or advanced wrestler cannot form a viable bracket, Bracketman provides one-click advisory merging into the adjacent experience tier.
+
+---
+
+## Installation & Setup
+
+### System Prerequisites
+Bracketman runs on **Linux, macOS, and Windows** with **Python 3.10+**.
+
+#### Ubuntu / Debian / Raspberry Pi OS
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-venv python3-pip git curl
 ```
 
-#### Fedora / RHEL / Rocky Linux
+#### Fedora / RHEL
 ```bash
 sudo dnf install -y python3 python3-pip git curl
 ```
 
-#### Arch Linux / Manjaro
+#### macOS (Homebrew)
 ```bash
-sudo pacman -S --needed python python-pip git curl
-```
-
-#### openSUSE
-```bash
-sudo zypper install -y python3 python3-pip git curl
-```
-
-Verify your Python version (must be 3.10 or higher):
-```bash
-python3 --version
+brew install python git
 ```
 
 ---
 
-### 2. Clone the Repository
-
-Clone the Bracketman repository into your personal code or applications folder:
+### Quick Start Installation
 
 ```bash
-cd ~
+# 1. Clone repository
 git clone https://github.com/sengelbert/bracketman.git
 cd bracketman
-```
 
-*(If using SSH keys with GitHub: `git clone git@github.com:sengelbert/bracketman.git`)*
-
----
-
-### 3. Create & Activate a Virtual Environment
-
-```bash
+# 2. Set up virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
-```
 
-> [!TIP]
-> Always make sure `.venv` is activated when running Bracketman. Your terminal prompt will display `(.venv)`.
-
----
-
-### 4. Install Bracketman & Dependencies
-
-Upgrade pip and install Bracketman in editable mode:
-
-```bash
+# 3. Install dependencies in editable mode
 pip install --upgrade pip
 pip install -e .
-pip install pytest
-```
+pip install pytest selenium
 
----
-
-### 5. Verify the Installation
-
-Run the automated test suite to confirm everything is working properly:
-
-```bash
+# 4. Run automated tests to verify
 pytest -v
 ```
-*(All tests should pass in under a second.)*
 
-Check the CLI tool:
-```bash
-bracketman --help
-```
+All tests should pass in under a second (`13 passed in 0.15s`).
 
 ---
 
-## Running Bracketman
+## Running the Application
 
-### Option A: Launch the Streamlit Web UI (Secure Local-Only Mode &mdash; Default)
-
-By default, Bracketman runs in **Secure Local-Only Mode** (bound to `127.0.0.1`). This ensures that even when your laptop is connected to a public high school gym Wi-Fi, **no one else on the network can connect or make unauthorized changes**:
+### 1. Secure Local-Only Mode (Recommended for Tournaments)
+When operating at a tournament venue or school gym Wi-Fi, run in default secure mode. This binds exclusively to `127.0.0.1`, guaranteeing that other computers on the gym Wi-Fi cannot access or tamper with your brackets:
 
 ```bash
-# Secure local-only mode (default, for tournaments/on-site)
 bracketman ui
 ```
+Open your browser to: **`http://localhost:8503`**
 
-Only the web browser on your own laptop can access `http://localhost:8503`.
-
----
-
-### Option B: Home LAN Mode (Access from Other Devices at Home)
-
-When you are at home and want to access Bracketman from another computer, iPad, or laptop on your private home network:
+### 2. Home / Private LAN Mode
+When preparing brackets at home and sharing access with other laptops or tablets on your private home network:
 
 ```bash
-# Pass --lan to listen on 0.0.0.0
 bracketman ui --lan
-
-# (Optionally specify a custom port):
-bracketman ui --lan --port 8503
 ```
+Streamlit will output your network address (e.g. `http://192.168.1.50:8503`).
 
-Streamlit will print your home network URL:
-```
-  Local URL:   http://localhost:8503
-  Network URL: http://192.168.1.50:8503
-```
+### 3. Background Systemd Service (Head Table Linux Mini-PC)
+For dedicated tournament kiosks or mini-PCs, Bracketman can run automatically on system boot:
 
-> [!TIP]
-> **Sharing Brackets with Table Workers Safely**:
-> To give scoring tables and coaches their bracket schedules without giving them edit access to the live software:
-> 1. Export the printable sheets from the **🖨️ Print & Export** tab.
-> 2. Print physical paper sheets, or save the unshaded brackets as PDF/HTML and share the static files. This keeps full administrative control strictly on your tournament laptop.
-
----
-
-### Option C: Run as a Background System Service (systemd)
-
-For dedicated tournament laptops or mini-PCs running at the head table, you can configure Bracketman to run automatically on system boot.
-
-Create a systemd unit file:
-```bash
-sudo nano /etc/systemd/system/bracketman.service
-```
-
-Paste the following configuration (replace `<username>` with your Linux username):
 ```ini
+# /etc/systemd/system/bracketman.service
 [Unit]
 Description=Bracketman Wrestling Tournament Manager
 After=network.target
 
 [Service]
 Type=simple
-User=<username>
-WorkingDirectory=/home/<username>/bracketman
-ExecStart=/home/<username>/bracketman/.venv/bin/streamlit run src/bracketman/web/app.py --server.port 8503 --server.address 0.0.0.0 --server.headless true
+User=simon
+WorkingDirectory=/home/simon/bracketman
+ExecStart=/home/simon/bracketman/.venv/bin/streamlit run src/bracketman/web/app.py --server.port 8503 --server.address 127.0.0.1 --server.headless true
 Restart=on-failure
 RestartSec=5s
 Environment=PYTHONUNBUFFERED=1
@@ -189,64 +242,54 @@ Environment=PYTHONUNBUFFERED=1
 WantedBy=multi-user.target
 ```
 
-Enable and start the service:
+Enable and start:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now bracketman
 ```
 
-Check service status:
-```bash
-sudo systemctl status bracketman
+---
+
+## Tournament Day Workflow
+
+```mermaid
+flowchart TD
+    A["1. Ingest Master Rosters<br/>(Google Sheets / Excel)"] --> B["2. Automated Madison DP Grouping<br/>(4-Man Pods, Age Weight Spreads)"]
+    B --> C["3. Teammate Separation<br/>(Adjacent Seed Boundary Swapping)"]
+    C --> D["4. Morning Check-In & Weigh-In<br/>(Scratch No-Shows, Add Walk-Ins)"]
+    D --> E["5. Live Rethink & Re-Optimize<br/>(Scope-wide or by Specific Bracket IDs)"]
+    E --> F["6. Export & Print<br/>(1-Page Unshaded Score Sheets)"]
+    F --> G["7. Mat Table Scoring & Awards<br/>(Official Placement Lines at Top)"]
 ```
 
----
-
-## Tournament Workflow: Scratches, Walk-Ins & Rethinking Brackets
-
-When running a tournament, changes happen fast at the check-in table. Bracketman gives you three seamless ways to refresh and rethink brackets:
-
-### 1. Live Mat-side Scratches & Walk-Ins (In-App)
-1. Go to the **🛠️ Tweak & Regenerate by ID** tab.
-2. **Scratches**: Under **❌ Scratch No-Show Wrestler**, select the wrestler and click **Confirm Scratch**. The wrestler is removed from their bracket, and bout schedules update immediately.
-3. **Walk-Ins**: Under **➕ Add Walk-In Wrestler**, enter the wrestler's name, scale weight, and age/skill. Bracketman ranks the best existing brackets by weight spread and teammate balance, or lets you spin off a new bracket.
-
-### 2. Rethinking & Re-Optimizing Brackets after Scratches
-When multiple scratches or walk-ins leave some brackets with 2 or 3 wrestlers and unbalanced weights:
-- **Scope-Wide Rethink**:
-  1. In **🛠️ Tweak & Regenerate by ID**, navigate to **🔄 Refresh & Rethink Brackets**.
-  2. Choose **"By Division / Age Group (or Whole Tournament)"**.
-  3. Select your scope (e.g. `Coed - 8U` or `ALL`).
-  4. Ensure **"Preserve Locked / Hand-Tweaked Brackets"** is checked (to protect brackets you already finalized).
-  5. Click **⚡ Rethink & Re-Optimize Brackets**.
-  6. The Madison DP engine pools all active wrestlers (excluding scratches, including walk-ins) and re-partitions them into clean 4-person brackets.
-- **Targeted Rethink (by Bracket IDs)**:
-  1. Switch to **"Targeted Selection by Specific Bracket ID(s)"**.
-  2. Select only the affected bracket IDs (e.g. `COED-8U-BEG-01` and `COED-8U-BEG-02`).
-  3. Click **⚡ Regenerate Selected Bracket(s)**.
-
-### 3. Re-Syncing from Google Sheets
-If coaches or table staff update the master Google Sheet directly during check-ins:
-1. Go to the **📥 Sheet Import & Sync** tab.
-2. Select **"Sync with Sheet (Preserve Locked/Tweaked Brackets)"** to pull new weights and entries while protecting brackets you locked.
-3. Or select **"Full Overwrite"** to re-import and rebuild the entire tournament from the raw sheet.
+1. **Before Tournament**: Import your multi-team roster via **📥 Sheet Import & Sync**. Review brackets in **🏆 Brackets Explorer**.
+2. **Morning Check-In**: Table staff report no-shows or new walk-ins. Go to **🛠️ Tweak & Regenerate by ID**:
+   - Scratch no-shows with one click.
+   - Enter walk-ins and assign them to recommended pods.
+3. **Re-Optimize**: Click **⚡ Rethink & Re-Optimize Brackets** to rebalance affected divisions into clean 4-person brackets while preserving your locked brackets.
+4. **Print & Distribute**: Go to **🖨️ Print & Export**, print the 1-page unshaded score sheets, and hand them to the table workers for each mat.
+5. **Awards**: When a round-robin concludes, table workers fill in the top Official Placement & Awards box and deliver the sheet directly to the awards table.
 
 ---
 
-## Updating Bracketman
+## Automated Test Suite
 
-To pull the latest updates and bug fixes from GitHub:
+Bracketman maintains strict test coverage over roster parsing, grouping algorithms, tiebreakers, persistence, and mat-side tweaks:
 
 ```bash
-cd ~/bracketman
-git pull origin main
-source .venv/bin/activate
-pip install -e .
-pytest -v
+.venv/bin/pytest -v
 ```
+
+Test coverage includes:
+- `test_loader.py`: Google Sheet ID extraction, instruction preamble header detection, dual-entry parsing, and `.xlsx` roundtrips.
+- `test_grouping.py`: Madison DP clustering, straggler prevention, teammate boundary swapping, and cross-skill fallback.
+- `test_store.py`: Tournament persistence, manual moves/swaps, walk-in suitability scoring, scratches, and bracket re-optimization.
+- `test_exporters.py`: HTML, multi-tab Excel, and CSV export generation.
 
 ---
 
-## License
+## Contributing & License
 
-MIT License. Designed for youth wrestling leagues and tournament directors.
+Contributions, bug reports, and suggestions from wrestling coaches, tournament directors, and software developers are warmly welcome!
+
+Distributed under the **MIT License**. Created with passion for youth wrestling communities.
