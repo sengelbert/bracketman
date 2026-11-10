@@ -6,6 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -26,7 +27,7 @@ from bracketman.io.loader import load_wrestlers
 from bracketman.models import BracketGroup, GroupFlag, GroupRuleConfig, TournamentResult, Wrestler
 
 
-DEFAULT_STORE_DIR = Path("data/tournaments")
+DEFAULT_STORE_DIR = Path(os.environ.get("BRACKETMAN_DATA_DIR", "data/tournaments"))
 
 
 def _now_iso() -> str:

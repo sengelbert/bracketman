@@ -1,0 +1,14 @@
+services:
+  bracketman:
+    build:
+      context: .
+      dockerfile: Containerfile
+    container_name: bracketman
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8503:8503"
+    volumes:
+      - ./data:/app/data:Z
+      - ./output:/app/output:Z
+    environment:
+      - PYTHONUNBUFFERED=1

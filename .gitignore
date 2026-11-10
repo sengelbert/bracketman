@@ -8,6 +8,9 @@ dist/
 build/
 .pytest_cache/
 output/
-data/
+data/tournaments/
+data/*.tmp
 *.xlsx
+!data/example_tournament.xlsx
 !tests/fixtures/*.xlsx
+

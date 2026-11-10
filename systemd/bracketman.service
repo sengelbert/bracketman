@@ -1,0 +1,17 @@
+[Unit]
+Description=Bracketman Wrestling Tournament Manager (Localhost)
+Documentation=https://github.com/sengelbert/bracketman
+After=network.target
+
+[Service]
+Type=simple
+# For user service (~/.config/systemd/user/bracketman.service), %h expands to user home directory.
+# If installed as root system service (/etc/systemd/system/bracketman.service), replace %h with absolute path and set User=.
+WorkingDirectory=%h/bracketman
+ExecStart=%h/bracketman/.venv/bin/bracketman ui --headless --port 8503 --host 127.0.0.1
+Restart=on-failure
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

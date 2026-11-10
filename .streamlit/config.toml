@@ -1,0 +1,7 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+port = 8503
+enableCORS = false
+enableXsrfProtection = true

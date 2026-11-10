@@ -96,6 +96,32 @@
   - Created `scripts/take_screenshots.py` using Selenium and headless Firefox to capture all 5 Streamlit tabs and the printable bracket HTML directly into `docs/images/`.
   - Embedded high-resolution screenshots into `README.md` alongside comprehensive walkthroughs of all features.
 
+### Decision 11: Fedora Linux Localhost Deployment Readiness & Hardening
+- **Context**: Deploying Bracketman to other Fedora Linux machines (kiosk laptops, gym mini-PCs, or head-table workstations) requires zero cloud setup, zero telemetry prompts, predictable localhost binding, SELinux compliance, and automated installation.
+- **Decision**:
+  - **Automated Fedora Setup**: Added [setup_fedora.sh](file:///home/simon/Code/Personal/bracketman/scripts/setup_fedora.sh) to detect Fedora/RHEL, verify Python 3.10+, provision virtual environment `.venv`, install `.[dev]`, ensure example datasets exist, and run pytest verification.
+  - **Zero-Prompt Streamlit Config**: Created [.streamlit/config.toml](file:///home/simon/Code/Personal/bracketman/.streamlit/config.toml) and passed `--browser.gatherUsageStats false` in `bracketman ui` to permanently silence first-run email prompts and disable telemetry.
+  - **Path Resilience**: Added `_find_file()` fallback logic in [app.py](file:///home/simon/Code/Personal/bracketman/src/bracketman/web/app.py) and [cli.py](file:///home/simon/Code/Personal/bracketman/src/bracketman/cli.py) so static assets (`assets/logo.jpg`), example spreadsheets (`data/example_tournament.xlsx`), and default configs (`configs/default.yaml`) resolve properly regardless of current working directory.
+  - **Custom Storage Path**: Added `BRACKETMAN_DATA_DIR` environment variable support in [store.py](file:///home/simon/Code/Personal/bracketman/src/bracketman/store.py) (defaults to `data/tournaments`).
+  - **Systemd User & System Service**: Provided [bracketman.service](file:///home/simon/Code/Personal/bracketman/systemd/bracketman.service) supporting unprivileged systemd user daemon execution (`systemctl --user enable --now bracketman`).
+  - **SELinux & Rootless Container Support**: Added [Containerfile](file:///home/simon/Code/Personal/bracketman/Containerfile) and [compose.yaml](file:///home/simon/Code/Personal/bracketman/compose.yaml) configured with `:Z` volume relabeling for Fedora's default rootless Podman runtime.
+  - **Standardized Packaging**: Added `requirements.txt`, `requirements-dev.txt`, and updated `[project.optional-dependencies]` in `pyproject.toml`.
+
+### Decision 12: Windows Desktop Compatibility & 1-Click Bootstrapping
+- **Context**: Coaches and head-table staff frequently bring Windows laptops to tournaments. Installation must not assume Bash, systemd, or Linux display servers, and should require zero command-line expertise.
+- **Decision**:
+  - **1-Click Windows Launcher**: Added [run_bracketman.bat](file:///home/simon/Code/Personal/bracketman/run_bracketman.bat) in repository root. Detects system `python` or `py -3`, bootstraps `.venv`, installs dependencies, generates example data if absent, and opens Streamlit in user browser. Sets `chcp 65001` and `PYTHONUTF8=1` for UTF-8 terminal output.
+  - **Automated PowerShell Installer**: Added [setup_windows.ps1](file:///home/simon/Code/Personal/bracketman/scripts/setup_windows.ps1) with strict error handling, virtual environment setup, and pytest verification.
+  - **Platform-Aware Headless Detection**: In [cli.py](file:///home/simon/Code/Personal/bracketman/src/bracketman/cli.py#L300), scoped `DISPLAY`/`WAYLAND_DISPLAY` headless fallback strictly to `sys.platform.startswith("linux")`. Prevents Windows and macOS desktop sessions from erroneously defaulting to headless mode without auto-opening a browser tab.
+  - **Explicit File Encodings & Path Safety**: All file writes, reads, and CSV streams enforce explicit `utf-8` or `utf-8-sig` to prevent default Windows-1252 (cp1252) encoding crashes.
+
+### Decision 13: macOS Support & Native vs. Container Strategy
+- **Context**: Coaches use macOS (Apple Silicon and Intel) alongside Windows and Linux. Additionally, macOS ships a stub Xcode `/usr/bin/python3` at version 3.9, which is older than Bracketman's `>=3.10` requirement.
+- **Decision**:
+  - **macOS Automated Setup**: Added [setup_macos.sh](file:///home/simon/Code/Personal/bracketman/scripts/setup_macos.sh) that searches `/opt/homebrew/bin/python3` (Apple Silicon), `/usr/local/bin/python3` (Intel Homebrew), and `/Library/Frameworks/Python.framework` before falling back to `PATH`, verifying `sys.version_info >= (3, 10)` so it never trips on Xcode Python 3.9.
+  - **1-Click Finder Launcher**: Added [run_bracketman.command](file:///home/simon/Code/Personal/bracketman/run_bracketman.command) (`chmod +x`), allowing macOS users to double-click directly in Finder to bootstrap `.venv` and open the browser.
+  - **Native `.venv` vs. Docker/Podman Guidance**: Documented that **Native `.venv`** is preferred on Windows and macOS tournament laptops (zero Linux VM overhead, instant startup, minimal RAM/battery usage), whereas **Podman/Docker** and **Native `.venv`** are equally first-class on Linux/Fedora where containers run natively on the host kernel without a VM.
+
 ---
 
 ## 3. Repository Structure
@@ -103,12 +129,28 @@
 ```text
 bracketman/
 ├── AGENTS.md                   # Agent directives: tests, docs, caveman token saving
-├── pyproject.toml              # Build & dependency metadata (CLI + Streamlit)
-├── README.md                   # Quick start, usage, and CLI reference
+├── pyproject.toml              # Build & dependency metadata (CLI + Streamlit + optional deps)
+├── requirements.txt            # Core requirements specification
+├── requirements-dev.txt        # Development and testing requirements
+├── Containerfile               # Rootless container specification (Podman / Docker)
+├── compose.yaml                # Localhost container compose definition (:Z SELinux volumes)
+├── run_bracketman.bat          # 1-click Windows launcher & auto-bootstrapper
+├── run_bracketman.command      # 1-click macOS Finder / Linux launcher & auto-bootstrapper
+├── README.md                   # Quick start, usage, deployment, and CLI reference
+├── .streamlit/
+│   └── config.toml             # Streamlit localhost defaults & telemetry silencing
+├── systemd/
+│   └── bracketman.service      # Systemd user/system unit template for auto-boot
 ├── docs/
 │   └── ARCHITECTURE_AND_DECISIONS.md  # Architectural specifications & decision log
 ├── configs/
 │   └── default.yaml            # Tournament rules, divisions, age/skill aliases
+├── scripts/
+│   ├── setup_fedora.sh         # Turnkey Fedora Linux installer & verifier
+│   ├── setup_macos.sh          # Turnkey macOS (Apple Silicon & Intel) installer & verifier
+│   ├── setup_windows.ps1       # Automated Windows PowerShell installer & verifier
+│   ├── generate_example_tournament.py # Synthetic tournament spreadsheet generator
+│   └── take_screenshots.py    # Headless Selenium documentation screenshot taker
 ├── src/bracketman/
 │   ├── models.py               # Wrestler, GroupRuleConfig, BracketGroup, Bout, TournamentResult
 │   ├── config.py               # YAML config loader & hierarchical rule resolution

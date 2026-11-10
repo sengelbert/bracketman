@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -25,6 +26,9 @@ def _load_config(config_path: str | None) -> TournamentConfig:
     default_cfg_path = Path("configs/default.yaml")
     if default_cfg_path.exists():
         return TournamentConfig.from_yaml(default_cfg_path)
+    repo_cfg = Path(__file__).resolve().parents[2] / "configs" / "default.yaml"
+    if repo_cfg.exists():
+        return TournamentConfig.from_yaml(repo_cfg)
     return TournamentConfig()
 
 
@@ -288,10 +292,18 @@ def ui_cmd(lan: bool, host: str | None, port: int, headless: bool) -> None:
     bind_host = host if host is not None else ("0.0.0.0" if lan else "127.0.0.1")
     if bind_host == "127.0.0.1":
         click.echo("🔒 Running in Secure Local-Only Mode (only accessible on this machine).")
+        click.echo(f"   URL: http://127.0.0.1:{port} (or http://localhost:{port})")
     else:
         click.echo("🌐 Running in LAN Mode (accessible to devices on your local Wi-Fi/network).")
+        click.echo(f"   Port: {port}")
 
     app_path = Path(__file__).resolve().parent / "web" / "app.py"
+    if headless:
+        is_headless = True
+    elif sys.platform.startswith("linux"):
+        is_headless = not (bool(os.environ.get("DISPLAY")) or bool(os.environ.get("WAYLAND_DISPLAY")))
+    else:
+        is_headless = False
     cmd = [
         sys.executable,
         "-m",
@@ -302,7 +314,9 @@ def ui_cmd(lan: bool, host: str | None, port: int, headless: bool) -> None:
         str(bind_host),
         "--server.port",
         str(port),
+        "--browser.gatherUsageStats",
+        "false",
     ]
-    if headless:
+    if is_headless:
         cmd.extend(["--server.headless", "true"])
     subprocess.run(cmd, check=True)

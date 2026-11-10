@@ -14,6 +14,7 @@ from bracketman.exporters.csv_xlsx import export_csv_files, export_xlsx_workbook
 from bracketman.exporters.html import export_printable_html, render_single_bracket_preview_html
 from bracketman.models import BracketGroup, TournamentResult
 from bracketman.store import (
+    DEFAULT_STORE_DIR,
     SavedTournament,
     add_walkin_wrestler,
     create_tournament,
@@ -35,7 +36,18 @@ from bracketman.store import (
 )
 
 
-DEFAULT_EXAMPLE_XLSX = Path("data/example_tournament.xlsx")
+def _find_file(rel_path: str | Path) -> Path:
+    p = Path(rel_path)
+    if p.exists():
+        return p
+    repo_root = Path(__file__).resolve().parents[3]
+    candidate = repo_root / rel_path
+    if candidate.exists():
+        return candidate
+    return p
+
+
+DEFAULT_EXAMPLE_XLSX = _find_file("data/example_tournament.xlsx")
 MERGE_ID_RE = re.compile(r"Merge into ([A-Z0-9-]+)")
 
 
@@ -56,7 +68,7 @@ def _group_summary_label(g: BracketGroup) -> str:
 
 
 def _render_sidebar() -> SavedTournament | None:
-    logo_path = Path("assets/logo.jpg")
+    logo_path = _find_file("assets/logo.jpg")
     if logo_path.exists():
         st.sidebar.image(str(logo_path), use_container_width=True)
     st.sidebar.title("Bracketman")
@@ -912,7 +924,7 @@ def _render_print_and_export_tab(tournament: SavedTournament) -> None:
         skipped_rows=tournament.result.skipped_rows,
     )
 
-    export_dir = Path("data/tournaments") / tournament.slug / "exports"
+    export_dir = DEFAULT_STORE_DIR / tournament.slug / "exports"
     export_dir.mkdir(parents=True, exist_ok=True)
     html_path = export_printable_html(
         filtered_result,
@@ -971,7 +983,8 @@ def _render_history_tab(tournament: SavedTournament) -> None:
 
 
 def main() -> None:
-    logo_icon = "assets/logo.jpg" if Path("assets/logo.jpg").exists() else "🚀"
+    logo_file = _find_file("assets/logo.jpg")
+    logo_icon = str(logo_file) if logo_file.exists() else "🚀"
     st.set_page_config(
         page_title="Bracketman — Wrestling Tournament Manager",
         page_icon=logo_icon,

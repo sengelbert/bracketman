@@ -155,50 +155,137 @@ Bracketman implements a mathematically optimal Madison weight grouping pipeline:
 
 ---
 
-## Installation & Setup
+## Installation & Setup (`.venv` Recommended)
 
-### System Prerequisites
-Bracketman runs on **Linux, macOS, and Windows** with **Python 3.10+**.
+A standard Python virtual environment (**`.venv`**) is the **recommended way to install and run Bracketman** across all platforms (Linux, Windows, and macOS). It runs natively with minimal memory (~50 MB RAM), zero virtual machine overhead, and instant startup.
 
-#### Ubuntu / Debian / Raspberry Pi OS
-```bash
-sudo apt update
-sudo apt install -y python3 python3-venv python3-pip git curl
-```
+### 1. System & Software Requirements by Platform
 
-#### Fedora / RHEL
-```bash
-sudo dnf install -y python3 python3-pip git curl
-```
+| Requirement | Fedora / RHEL | Ubuntu / Debian / Pi OS | Windows 10 / 11 (64-bit) | macOS 12+ (Apple Silicon & Intel) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Python ($\ge 3.10$)** | `python3` (`dnf`) | `python3` (`apt`) | [python.org](https://www.python.org/downloads/windows/) or `winget` *(check **"Add python.exe to PATH"**)* | [Homebrew](https://brew.sh/) (`brew install python`) or [python.org](https://www.python.org/downloads/macos/) |
+| **Virtual Env & Pip** | `python3-pip` (`venv` built-in) | `python3-venv` & `python3-pip` | Built into official Python installer | Built into Homebrew / python.org installer |
+| **Git** *(or ZIP download)* | `git` (`dnf`) | `git` (`apt`) | [git-scm.com](https://git-scm.com/download/win) or `winget` | `git` (`brew` or Xcode CLI tools) |
+| **Web Browser** | Firefox / Chrome | Firefox / Chromium | Edge / Chrome / Firefox | Safari / Chrome / Firefox |
+| **C++ Build Tools** | **None required** | **None required** | **None required** | **None required** |
 
-#### macOS (Homebrew)
-```bash
-brew install python git
-```
+#### Python Package Dependencies (Auto-Installed into `.venv`)
+All Python packages are defined in [`pyproject.toml`](pyproject.toml) and [`requirements.txt`](requirements.txt) and use pre-built binary wheels (zero compilation needed):
+- **Core**: `streamlit>=1.30`, `click>=8.0`, `PyYAML>=6.0`, `requests>=2.28`
+- **Dev / Testing** (`pip install -e ".[dev]"`): `pytest>=7.0`
+- **Excel / `.xlsx` Engine**: 100% pure Python stdlib (`zipfile` + `xml.etree.ElementTree`) — no external C/C++ spreadsheet libraries required.
 
 ---
 
-### Quick Start Installation
+### 2. Platform-by-Platform `.venv` Setup & Launch
 
+#### 🐧 Fedora / RHEL Linux
 ```bash
-# 1. Clone repository
+# 1. Install system prerequisites
+sudo dnf install -y python3 python3-pip git curl
+
+# 2. Clone repository
 git clone https://github.com/sengelbert/bracketman.git
 cd bracketman
 
-# 2. Set up virtual environment
+# 3A. Automated .venv setup & test verification
+./scripts/setup_fedora.sh
+
+# 3B. Or manual .venv setup
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 3. Install dependencies in editable mode
-pip install --upgrade pip
-pip install -e .
-pip install pytest selenium
-
-# 4. Run automated tests to verify
+pip install --upgrade pip setuptools
+pip install -e ".[dev]"
 pytest -v
+
+# 4. Launch on localhost (http://127.0.0.1:8503)
+bracketman ui
 ```
 
-All tests should pass in under a second (`13 passed in 0.15s`).
+#### 🐧 Ubuntu / Debian / Raspberry Pi OS
+```bash
+# 1. Install system prerequisites (note: python3-venv is a separate package on Debian/Ubuntu)
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip git curl
+
+# 2. Clone repository
+git clone https://github.com/sengelbert/bracketman.git
+cd bracketman
+
+# 3. Create .venv & install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip setuptools
+pip install -e ".[dev]"
+pytest -v
+
+# 4. Launch on localhost (http://127.0.0.1:8503)
+bracketman ui
+```
+
+#### 🪟 Windows 10 / 11
+1. **Install Prerequisites**:
+   - Install **Python 3.10+** from [python.org](https://www.python.org/downloads/windows/) (⚠️ check **"Add python.exe to PATH"** on the first installer screen) or run in PowerShell:
+     ```powershell
+     winget install Python.Python.3.12 Git.Git
+     ```
+2. **Option A — 1-Click `.venv` Bootstrap & Launch (Easiest)**:
+   - Double-click **`run_bracketman.bat`** in File Explorer.
+   - On first run, it automatically creates `.venv`, installs all packages, prepares the example tournament, and opens your browser to `http://localhost:8503`.
+3. **Option B — PowerShell Automated Setup Script**:
+   ```powershell
+   git clone https://github.com/sengelbert/bracketman.git
+   cd bracketman
+   .\scripts\setup_windows.ps1
+   ```
+4. **Option C — Manual `.venv` in PowerShell / Command Prompt**:
+   ```powershell
+   git clone https://github.com/sengelbert/bracketman.git
+   cd bracketman
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install --upgrade pip setuptools
+   pip install -e ".[dev]"
+   pytest -v
+   bracketman ui
+   ```
+
+#### 🍎 macOS (Apple Silicon M1–M4 & Intel)
+1. **Install Prerequisites**:
+   - macOS ships an older Xcode Python (3.9), so install **Python 3.10+** via [Homebrew](https://brew.sh/) or the official [python.org macOS installer](https://www.python.org/downloads/macos/):
+     ```bash
+     brew install python git
+     ```
+2. **Option A — 1-Click Finder Launch (Easiest)**:
+   - Double-click **`run_bracketman.command`** in Finder.
+   - Automatically finds Python 3.10+, creates `.venv`, installs dependencies, and opens your browser to `http://localhost:8503`.
+3. **Option B — Automated Terminal Setup Script**:
+   ```bash
+   git clone https://github.com/sengelbert/bracketman.git
+   cd bracketman
+   ./scripts/setup_macos.sh
+   ```
+4. **Option C — Manual `.venv` in Terminal**:
+   ```bash
+   git clone https://github.com/sengelbert/bracketman.git
+   cd bracketman
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install --upgrade pip setuptools
+   pip install -e ".[dev]"
+   pytest -v
+   bracketman ui
+   ```
+
+---
+
+### 3. Why `.venv` Is Preferred Over Docker / Podman
+
+| Platform | Preferred Method | Why? |
+| :--- | :--- | :--- |
+| **Windows 10 / 11** | **Native `.venv`** (`run_bracketman.bat`) | Uses ~50 MB RAM, starts in 1 second, zero battery drain, and only requires Python. Docker/Podman on Windows requires WSL2 + a hidden Linux VM (2–4 GB RAM overhead). |
+| **macOS** | **Native `.venv`** (`run_bracketman.command`) | Native Apple Silicon speed, instant startup, zero VM battery drain. Docker/Podman on macOS runs inside a Linux VM. |
+| **Fedora / Linux** | **Native `.venv`** *(or Rootless Podman)* | Native `.venv` is lightweight, fast, and easy to manage directly or via `systemd`. Rootless Podman is also available as an optional alternative on Linux servers. |
 
 ---
 
@@ -210,7 +297,10 @@ When operating at a tournament venue or school gym Wi-Fi, run in default secure 
 ```bash
 bracketman ui
 ```
-Open your browser to: **`http://localhost:8503`**
+Open your browser to: **`http://localhost:8503`** (or `http://127.0.0.1:8503`).
+
+> [!NOTE]
+> Streamlit telemetry and first-run prompts are pre-disabled via `.streamlit/config.toml` so the UI launches cleanly on fresh installations without terminal prompts.
 
 ### 2. Home / Private LAN Mode
 When preparing brackets at home and sharing access with other laptops or tablets on your private home network:
@@ -220,9 +310,29 @@ bracketman ui --lan
 ```
 Streamlit will output your network address (e.g. `http://192.168.1.50:8503`).
 
-### 3. Background Systemd Service (Head Table Linux Mini-PC)
-For dedicated tournament kiosks or mini-PCs, Bracketman can run automatically on system boot:
+### 3. Optional: Background Systemd Service (Linux Kiosk / Mini-PC)
 
+#### Option A: Unprivileged User Service (Recommended on Fedora / Ubuntu)
+No `sudo` required. Uses your local `.venv`:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/bracketman.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now bracketman
+```
+
+Check status:
+```bash
+systemctl --user status bracketman
+```
+
+To keep the service running when you log out (headless mini-PC):
+```bash
+loginctl enable-linger $USER
+```
+
+#### Option B: System-wide Service (Root / Multi-User)
 ```ini
 # /etc/systemd/system/bracketman.service
 [Unit]
@@ -233,7 +343,7 @@ After=network.target
 Type=simple
 User=simon
 WorkingDirectory=/home/simon/bracketman
-ExecStart=/home/simon/bracketman/.venv/bin/streamlit run src/bracketman/web/app.py --server.port 8503 --server.address 127.0.0.1 --server.headless true
+ExecStart=/home/simon/bracketman/.venv/bin/bracketman ui --headless --port 8503 --host 127.0.0.1
 Restart=on-failure
 RestartSec=5s
 Environment=PYTHONUNBUFFERED=1
@@ -247,6 +357,29 @@ Enable and start:
 sudo systemctl daemon-reload
 sudo systemctl enable --now bracketman
 ```
+
+### 4. Optional: Podman / Docker Container (Linux Alternative)
+
+If you prefer running inside a container on a Linux host (where containers run natively without a VM):
+
+```bash
+# Build image
+podman build -t bracketman .
+
+# Run strictly on localhost (with :Z for SELinux volume relabeling)
+podman run -d --name bracketman \
+  -p 127.0.0.1:8503:8503 \
+  -v ./data:/app/data:Z \
+  -v ./output:/app/output:Z \
+  bracketman
+```
+
+Or using `podman compose` / `docker compose`:
+```bash
+podman compose up -d
+```
+
+Access at **`http://localhost:8503`**.
 
 ---
 
