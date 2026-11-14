@@ -1824,7 +1824,7 @@ def export_printable_roster_html(
     tournament_name: str = "Wrestling Tournament",
     tournament_date: str = "",
     scratched_wrestlers: list[dict] | None = None,
-    default_view: str = "alpha",
+    default_view: str = "by-gid",
 ) -> Path:
     """Generate a printable Master Tournament Wrestler Roster & Mat Directory handout.
 
@@ -2334,7 +2334,7 @@ def export_printable_roster_html(
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>{escape(base_slug)}_roster_a_z</title>
+  <title>{escape(base_slug)}_roster_by_bracket_id</title>
   <style>
     @page {{
       size: letter portrait;
@@ -2628,7 +2628,8 @@ def export_printable_roster_html(
       </label>
       <label>Sort Rows:
         <select id="r-sort" onchange="applyRosterFilters()">
-          <option value="gid" selected="selected">Bracket ID (A&ndash;Z &rarr; Seed)</option>
+          <option value="age-weight-skill" selected="selected">Age &rarr; Weight &rarr; Skill</option>
+          <option value="gid">Bracket ID (A&ndash;Z &rarr; Seed)</option>
           <option value="default">Default for View</option>
           <option value="name">Wrestler Name (A&ndash;Z)</option>
           <option value="mat">Mat # &rarr; Bracket ID</option>
@@ -2725,7 +2726,35 @@ def export_printable_roster_html(
   </main>
 
   <script>
+    const AGE_ORDER = {{ '4U': 0, '6U': 1, '8U': 2, '10U': 3, '12U': 4, '14U': 5, '15U': 5 }};
+    const SKILL_ORDER = {{ 'Beginner': 0, 'Novice': 0, 'Intermediate': 1, 'Advanced': 2, 'Experienced': 2 }};
+    function getAgeRank(el) {{
+      const ag = (el.dataset.age || '').toUpperCase().trim();
+      if (ag in AGE_ORDER) return AGE_ORDER[ag];
+      const m = ag.match(/(\\d+)/);
+      return m ? parseInt(m[1], 10) : 999;
+    }}
+    function getSkillRank(el) {{
+      const sk = (el.dataset.skill || '').trim();
+      return (sk in SKILL_ORDER) ? SKILL_ORDER[sk] : 99;
+    }}
     function compareRows(a, b, sortMode) {{
+      if (sortMode === 'age-weight-skill') {{
+        const aa = getAgeRank(a);
+        const ab = getAgeRank(b);
+        if (aa !== ab) return aa - ab;
+        const wa = parseFloat(a.dataset.weight || '0');
+        const wb = parseFloat(b.dataset.weight || '0');
+        if (wa !== wb) return wa - wb;
+        const sa = getSkillRank(a);
+        const sb = getSkillRank(b);
+        if (sa !== sb) return sa - sb;
+        const sc = (a.dataset.skill || '').localeCompare(b.dataset.skill || '');
+        if (sc !== 0) return sc;
+        const c = (a.dataset.gid || '').localeCompare(b.dataset.gid || '');
+        if (c !== 0) return c;
+        return (parseInt(a.dataset.seed || '0', 10) - parseInt(b.dataset.seed || '0', 10));
+      }}
       if (sortMode === 'gid') {{
         const c = (a.dataset.gid || '').localeCompare(b.dataset.gid || '');
         if (c !== 0) return c;
@@ -2891,8 +2920,10 @@ def export_printable_roster_html(
       window.print();
     }}
     function resetRosterFilters() {{
+      const viewEl = document.getElementById('r-view');
+      if (viewEl) viewEl.value = 'by-gid';
       const sortEl = document.getElementById('r-sort');
-      if (sortEl) sortEl.value = 'gid';
+      if (sortEl) sortEl.value = 'age-weight-skill';
       ['r-size', 'r-mat', 'r-div', 'r-age', 'r-skill', 'r-team'].forEach(id => {{
         const el = document.getElementById(id);
         if (el) el.value = '';

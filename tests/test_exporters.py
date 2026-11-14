@@ -204,7 +204,8 @@ def test_printable_roster_directory_html(tmp_path: Path):
     assert "6U &bull; SCHOOL / CLUB: AR" in doc
     assert 'id="view-by-gid"' in doc
     assert 'id="r-sort"' in doc
-    assert '<option value="gid" selected="selected">' in doc
+    assert '<option value="age-weight-skill" selected="selected">' in doc
+    assert 'value="by-gid" selected="selected"' in doc
     assert 'onclick="resetRosterFilters()"' in doc
     assert 'id="r-size"' in doc
     assert 'data-size="3"' in doc
