@@ -135,6 +135,14 @@ def _render_visual_bracket_diagram(group: BracketGroup) -> str:
     """
 
 
+_BW_TROPHY_SVG = (
+    '<svg class="bw-trophy-icon" width="11" height="11" viewBox="0 0 16 16" '
+    'style="vertical-align:-1.5px;margin-right:3px;" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+    '<path d="M4 2h8v4a4 4 0 0 1-8 0V2zm-2 1h2v3H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm10 0h2a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1h-2V3zM7 10h2v2.5H7V10zm-2.5 2.5h7V14h-7v-1.5z" fill="#000"/>'
+    "</svg>"
+)
+
+
 def _render_bout_and_tally_sheet(
     group: BracketGroup,
     tournament_name: str = "Wrestling Tournament",
@@ -207,7 +215,7 @@ def _render_bout_and_tally_sheet(
     # 2A. Official Bracket Placement & Awards Section (club removed)
     parts.append(
         '<div class="awards-section">'
-        '<div class="awards-title">&#127942; OFFICIAL BRACKET PLACEMENT &amp; AWARDS</div>'
+        f'<div class="awards-title">{_BW_TROPHY_SVG}OFFICIAL BRACKET PLACEMENT &amp; AWARDS</div>'
         '<table class="awards-table">'
         "<tbody>"
         "<tr>"
@@ -519,7 +527,7 @@ def _render_blank_sheet_body(
     parts.append('<div class="combined-tally-awards">')
     parts.append(
         '<div class="awards-section">'
-        '<div class="awards-title">&#127942; OFFICIAL BRACKET PLACEMENT &amp; AWARDS</div>'
+        f'<div class="awards-title">{_BW_TROPHY_SVG}OFFICIAL BRACKET PLACEMENT &amp; AWARDS</div>'
         '<table class="awards-table">'
         "<tbody>"
         "<tr>"
@@ -1346,6 +1354,7 @@ def _build_printable_html_document(
       margin-left: auto;
       margin-right: auto;
       box-sizing: border-box;
+      font-variant-emoji: text;
     }}
     .sheet-header {{
       border-bottom: 2.5px solid #000;
@@ -1967,7 +1976,7 @@ def export_printable_roster_html(
         m_wrestlers = sum(g.size for g in m_grps)
         m_bouts = sum(len(g.bouts) for g in m_grps)
         m_warns = sum(1 for g in m_grps if g.group_id in flagged_or_merged_group_ids)
-        warn_suffix = f" &bull; &#9888; {m_warns} Flagged/Merged" if m_warns else ""
+        warn_suffix = f" &bull; &#9888;&#xFE0E; {m_warns} Flagged/Merged" if m_warns else ""
         mat_summary_cards.append(
             f'<div class="mat-stat-chip">'
             f'<span class="mat-chip-title">MAT {m}</span>'
@@ -1987,7 +1996,7 @@ def export_printable_roster_html(
 
     def _render_roster_row(e: dict) -> str:
         dual_tag = ' <span class="tag-dual">DUAL</span>' if e["is_dual_entry"] else ""
-        w_merge_icon = ' <span class="tag-warn" title="Wrestler merged across age/skill/division">&#9888; MERGED</span>' if e["is_w_merged"] else ""
+        w_merge_icon = ' <span class="tag-warn" title="Wrestler merged across age/skill/division">&#9888;&#xFE0E; MERGED</span>' if e["is_w_merged"] else ""
         if e.get("is_no_match"):
             mat_badge = '<span class="roster-mat-unassigned">NO MATCH</span>'
         elif e["mat_number"] is not None:
@@ -2000,7 +2009,7 @@ def export_printable_roster_html(
             orig_short = f"{e['w_age_group']} {e['w_skill_level'][:3].upper()}"
             div_cell_html = (
                 f"{escape(e['division'])} &bull; {escape(e['age_group'])} &bull; {escape(skill_short)}"
-                f'<span class="gid-sub"><strong>&#9888; Reg: {escape(orig_short)}</strong></span>'
+                f'<span class="gid-sub"><strong>&#9888;&#xFE0E; Reg: {escape(orig_short)}</strong></span>'
             )
         else:
             div_cell_html = f"{escape(e['division'])} &bull; {escape(e['age_group'])} &bull; {escape(skill_short)}"
@@ -2012,7 +2021,7 @@ def export_printable_roster_html(
             )
             warn_badges_html = f'<div class="warn-pill-wrap">{warn_pills}</div>'
 
-        gid_warn_icon = ' <span class="tag-warn">&#9888;</span>' if e["has_alert"] else ""
+        gid_warn_icon = ' <span class="tag-warn">&#9888;&#xFE0E;</span>' if e["has_alert"] else ""
         row_cls = "roster-row has-warning-row" if e["has_alert"] else "roster-row"
 
         if e.get("is_no_match"):
@@ -2069,7 +2078,7 @@ def export_printable_roster_html(
         '<th class="col-wwt">WT</th>'
         '<th class="col-wdiv">DIV / AGE / SKILL</th>'
         '<th class="col-wmat">MAT #</th>'
-        '<th class="col-wgid">BRACKET ID, WEIGHTS &amp; &#9888; WARNINGS / MERGES</th>'
+        '<th class="col-wgid">BRACKET ID, WEIGHTS &amp; &#9888;&#xFE0E; WARNINGS / MERGES</th>'
         '<th class="col-wseed">SEED / POD</th>'
         '<th class="col-wopp">POD OPPONENTS (CLUB, WT)</th>'
         "</tr></thead>"
@@ -2399,6 +2408,7 @@ def export_printable_roster_html(
       background: #fff;
       padding: 0.2in;
       border: 1px solid #cbd5e1;
+      font-variant-emoji: text;
     }}
     .roster-header {{
       border-bottom: 2.5px solid #000;
@@ -2697,7 +2707,7 @@ def export_printable_roster_html(
         <span><strong>Total Brackets:</strong> {total_brackets}</span>
         <span><strong>Total Scheduled Bouts:</strong> {total_bouts}</span>
         <span><strong>Active Mats:</strong> {len(mats) or 1}</span>
-        <span><strong>&#9888; Brackets w/ Warnings or Merges:</strong> {total_warn_brackets}</span>
+        <span><strong>&#9888;&#xFE0E; Brackets w/ Warnings or Merges:</strong> {total_warn_brackets}</span>
       </div>
     </header>
 
