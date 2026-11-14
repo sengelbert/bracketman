@@ -197,6 +197,7 @@ class BracketGroup:
     fixed_class_label: str | None = None
     locked: bool = False
     manually_modified: bool = False
+    mat_number: int | None = None
 
     @property
     def size(self) -> int:
@@ -241,6 +242,10 @@ class BracketGroup:
         return f"{self.min_weight:g}–{self.max_weight:g} lbs"
 
     @property
+    def mat_label(self) -> str:
+        return f"Mat {self.mat_number}" if self.mat_number is not None else "Unassigned"
+
+    @property
     def team_counts(self) -> Counter[str]:
         return Counter(w.team_key for w in self.wrestlers if w.team_key)
 
@@ -269,10 +274,12 @@ class BracketGroup:
             "fixed_class_label": self.fixed_class_label,
             "locked": self.locked,
             "manually_modified": self.manually_modified,
+            "mat_number": self.mat_number,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BracketGroup:
+        raw_mat = data.get("mat_number")
         return cls(
             group_id=str(data["group_id"]),
             division=str(data["division"]),
@@ -287,6 +294,7 @@ class BracketGroup:
             fixed_class_label=data.get("fixed_class_label"),
             locked=bool(data.get("locked", False)),
             manually_modified=bool(data.get("manually_modified", False)),
+            mat_number=int(raw_mat) if raw_mat is not None else None,
         )
 
 

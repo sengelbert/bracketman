@@ -93,3 +93,30 @@ def test_skill_merge_for_solo_straggler():
     assert len(res.groups) == 1
     assert res.groups[0].size == 4
     assert any(f.code == "SKILL_MERGED" for f in res.groups[0].flags)
+
+
+def test_priority_skill_blending_option_b():
+    """When blend_skills_to_fill_brackets=True (Weight > Age > Skill > Team), 2-man Beginner and
+    2-man Advanced pods at overlapping weights blend into a 4-man pod, while pure 4-man clusters
+    stay pure-skill and Girls/Coed remain strictly separated.
+    """
+    cfg = TournamentConfig(blend_skills_to_fill_brackets=True)
+    wrestlers = [
+        # 2 Beginner + 2 Advanced in Coed 12U around 120-126 lbs -> blends into a single 4-man pod instead of two 2-man pods
+        _make_wrestler(1, 120.0, "T1", age_group="12U", skill="Beginner", division="Coed"),
+        _make_wrestler(2, 121.5, "T2", age_group="12U", skill="Advanced", division="Coed"),
+        _make_wrestler(3, 124.0, "T3", age_group="12U", skill="Beginner", division="Coed"),
+        _make_wrestler(4, 125.5, "T4", age_group="12U", skill="Advanced", division="Coed"),
+        # 2 Girls in 12U at the same weight -> must remain strictly in Girls division
+        _make_wrestler(5, 121.0, "T5", age_group="12U", skill="Beginner", division="Girls"),
+        _make_wrestler(6, 123.0, "T6", age_group="12U", skill="Advanced", division="Girls"),
+    ]
+    res = build_tournament_groups(wrestlers, config=cfg)
+    coed_groups = [g for g in res.groups if g.division == "Coed"]
+    girls_groups = [g for g in res.groups if g.division == "Girls"]
+    assert len(coed_groups) == 1
+    assert coed_groups[0].size == 4
+    assert any(f.code == "SKILL_MERGED" for f in coed_groups[0].flags)
+    assert len(girls_groups) == 1
+    assert girls_groups[0].size == 2
+

@@ -23,6 +23,7 @@ def export_csv_files(result: TournamentResult, output_dir: str | Path) -> dict[s
         writer.writerow(
             [
                 "Group ID",
+                "Mat #",
                 "Division",
                 "Age Group",
                 "Skill Level",
@@ -43,6 +44,7 @@ def export_csv_files(result: TournamentResult, output_dir: str | Path) -> dict[s
             writer.writerow(
                 [
                     g.group_id,
+                    g.mat_label,
                     g.division,
                     g.age_group,
                     g.skill_level,
@@ -63,6 +65,7 @@ def export_csv_files(result: TournamentResult, output_dir: str | Path) -> dict[s
         writer.writerow(
             [
                 "Group ID",
+                "Mat #",
                 "Seed",
                 "Wrestler ID",
                 "Wrestler Name",
@@ -81,6 +84,7 @@ def export_csv_files(result: TournamentResult, output_dir: str | Path) -> dict[s
                 writer.writerow(
                     [
                         g.group_id,
+                        g.mat_label,
                         seed,
                         w.id,
                         w.name,
@@ -100,6 +104,7 @@ def export_csv_files(result: TournamentResult, output_dir: str | Path) -> dict[s
         writer.writerow(
             [
                 "Group ID",
+                "Mat #",
                 "Division",
                 "Age Group",
                 "Skill Level",
@@ -122,6 +127,7 @@ def export_csv_files(result: TournamentResult, output_dir: str | Path) -> dict[s
                 writer.writerow(
                     [
                         g.group_id,
+                        g.mat_label,
                         g.division,
                         g.age_group,
                         g.skill_level,
@@ -155,6 +161,7 @@ def export_xlsx_workbook(result: TournamentResult, output_path: str | Path) -> P
     summary_rows: list[list[object]] = [
         [
             "Group ID",
+            "Mat #",
             "Division",
             "Age Group",
             "Skill Level",
@@ -174,6 +181,7 @@ def export_xlsx_workbook(result: TournamentResult, output_path: str | Path) -> P
         summary_rows.append(
             [
                 g.group_id,
+                g.mat_label,
                 g.division,
                 g.age_group,
                 g.skill_level,
@@ -189,15 +197,76 @@ def export_xlsx_workbook(result: TournamentResult, output_path: str | Path) -> P
         )
     sheets.append(("Summary", summary_rows))
 
+    # 1B. Master Wrestler & Mat Roster Tab (Sorted A-Z by Wrestler Name)
+    from bracketman.exporters.html import _summarize_group_warnings_and_merges
+
+    roster_rows: list[list[object]] = [
+        [
+            "Wrestler Name",
+            "School / Club",
+            "Weight (lbs)",
+            "Mat #",
+            "Bracket ID",
+            "Warnings / Merges",
+            "Seed",
+            "Pod Size",
+            "Division",
+            "Age Group",
+            "Skill Level",
+            "Format",
+            "Bouts",
+            "Bracket Weight Range",
+            "Pod Opponents",
+            "Notes",
+        ]
+    ]
+    flat_roster: list[tuple[str, list[object]]] = []
+    for g in result.groups:
+        for seed_idx, w in enumerate(g.wrestlers, start=1):
+            opps = ", ".join(
+                f"{other.name} ({other.team}, {other.weight:g})"
+                for other in g.wrestlers
+                if other.id != w.id
+            )
+            warn_str = " | ".join(_summarize_group_warnings_and_merges(g, w))
+            note = "Dual Entry (Coed+Girls)" if w.is_dual_entry else ""
+            flat_roster.append(
+                (
+                    w.name.strip().lower(),
+                    [
+                        w.name,
+                        w.team,
+                        w.weight,
+                        g.mat_label,
+                        g.group_id,
+                        warn_str,
+                        seed_idx,
+                        g.size,
+                        g.division,
+                        g.age_group,
+                        g.skill_level,
+                        g.bracket_format,
+                        len(g.bouts),
+                        g.weight_label,
+                        opps,
+                        note,
+                    ],
+                )
+            )
+    for _, r_row in sorted(flat_roster, key=lambda x: x[0]):
+        roster_rows.append(r_row)
+    sheets.append(("Master_Roster", roster_rows))
+
     # 2. Flags & Recommendations Tab
     flag_rows: list[list[object]] = [
-        ["Group ID", "Division", "Age Group", "Skill Level", "Severity", "Code", "Message", "Recommendation"]
+        ["Group ID", "Mat #", "Division", "Age Group", "Skill Level", "Severity", "Code", "Message", "Recommendation"]
     ]
     for g in result.groups:
         for fl in g.flags:
             flag_rows.append(
                 [
                     g.group_id,
+                    g.mat_label,
                     g.division,
                     g.age_group,
                     g.skill_level,
@@ -221,17 +290,17 @@ def export_xlsx_workbook(result: TournamentResult, output_path: str | Path) -> P
             flag_note = f" [{' | '.join(fl.code for fl in g.flags)}]" if g.flags else ""
             rows.append(
                 [
-                    f"=== {g.group_id} ===",
+                    f"=== {g.group_id} ({g.mat_label}) ===",
                     f"{g.division} {g.age_group} {g.skill_level}",
                     f"Weights: {g.weight_label}",
                     f"Spread: {g.weight_spread_lbs:g} lbs ({g.weight_spread_pct:.1f}%)",
                     f"Format: {g.bracket_format}{flag_note}",
                 ]
             )
-            rows.append(["Seed", "Wrestler Name", "Weight (lbs)", "School / Code", "Club Tab", "Age", "Notes"])
+            rows.append(["Seed", "Wrestler Name", "Weight (lbs)", "School / Code", "Club Tab", "Age", "Mat #", "Notes"])
             for idx, w in enumerate(g.wrestlers, start=1):
                 note = "Dual Entry (Coed+Girls)" if w.is_dual_entry else ""
-                rows.append([idx, w.name, w.weight, w.team, w.team_tab, w.age or "", note])
+                rows.append([idx, w.name, w.weight, w.team, w.team_tab, w.age or "", g.mat_label, note])
             rows.append([])  # Blank separator row between groups
 
         sheets.append((tab_name, rows))

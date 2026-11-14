@@ -250,6 +250,7 @@ def load_wrestlers(
     loaded_tabs: list[str] = []
 
     next_id = 1
+    seen_wrestler_div: set[tuple[str, str, str]] = set()
     for sheet_name, rows in raw_sheets:
         if sheet_name.strip().lower() in ignored_lower:
             continue
@@ -259,9 +260,25 @@ def load_wrestlers(
             config=cfg,
             start_id_counter=next_id,
         )
-        if wrestlers:
+        deduped_wrestlers: list[Wrestler] = []
+        for w in wrestlers:
+            key = (w.name.strip().lower(), w.team_key, w.division)
+            if key in seen_wrestler_div:
+                skipped.append(
+                    {
+                        "sheet": sheet_name,
+                        "row": w.source_row,
+                        "name": w.name,
+                        "reason": f"Duplicate {w.division} entry for {w.name} ({w.team_key}) skipped (max 1 {w.division} bracket per wrestler).",
+                    }
+                )
+                continue
+            seen_wrestler_div.add(key)
+            deduped_wrestlers.append(w)
+
+        if deduped_wrestlers:
             loaded_tabs.append(sheet_name)
-        all_wrestlers.extend(wrestlers)
+        all_wrestlers.extend(deduped_wrestlers)
         all_skipped.extend(skipped)
         next_id += len(wrestlers)
 

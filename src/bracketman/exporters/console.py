@@ -64,21 +64,22 @@ def format_summary_report(result: TournamentResult, show_rosters: bool = False) 
 
     # Group Table
     lines.append("GENERATED BRACKET GROUPS")
-    lines.append("-" * 96)
+    lines.append("-" * 105)
     g_header = (
-        f"{'Group ID':<16} | {'Size':>4} | {'Weights':<14} | {'Actual Spread':>14} | "
+        f"{'Group ID':<16} | {'Mat':<6} | {'Size':>4} | {'Weights':<14} | {'Actual Spread':>14} | "
         f"{'Max Allowed':>15} | {'Teams'}"
     )
     lines.append(g_header)
-    lines.append("-" * 96)
+    lines.append("-" * 105)
 
     for g in result.groups:
         spread_str = f"{g.weight_spread_lbs:g}lb ({g.weight_spread_pct:.1f}%)" if g.size > 1 else "Solo"
         allowed_str = f"<= {g.allowed_spread_lbs:g}lb ({g.allowed_spread_pct:.0f}%)"
         teams_str = ", ".join(f"{w.team}" for w in g.wrestlers)
         warn_marker = " [!]" if g.has_warnings else ""
+        mat_str = f"Mat {g.mat_number}" if g.mat_number is not None else "Unasgn"
         lines.append(
-            f"{g.group_id:<16} | {g.size:>4} | {g.weight_label:<14} | {spread_str:>14} | "
+            f"{g.group_id:<16} | {mat_str:<6} | {g.size:>4} | {g.weight_label:<14} | {spread_str:>14} | "
             f"{allowed_str:>15} | {teams_str}{warn_marker}"
         )
         if show_rosters:

@@ -17,6 +17,7 @@ from bracketman.grouping.bouts import generate_bouts_for_group, resolve_bracket_
 from bracketman.grouping.madison import (
     _find_best_merge_candidate,
     _make_group_id,
+    assign_mats_to_groups,
     build_tournament_groups,
     evaluate_group_flags,
     group_fixed_classes,
@@ -177,8 +178,7 @@ def refresh_group(group: BracketGroup) -> None:
     group.wrestlers.sort(key=lambda w: (w.weight, w.team_key, w.name))
     group.bracket_format = resolve_bracket_format(len(group.wrestlers), group.rule.bracket_format)
     group.bouts = generate_bouts_for_group(group.wrestlers, group.bracket_format)
-    preserved_info = [f for f in group.flags if f.code == "SKILL_MERGED"]
-    group.flags = preserved_info
+    group.flags = []
     group.flags = evaluate_group_flags(group)
 
 
@@ -224,6 +224,29 @@ def reindex_and_refresh_all_groups(tournament: SavedTournament, renumber_ids: bo
             for fl in g.flags:
                 if fl.code == "SOLO_WRESTLER":
                     fl.suggestion = suggestion
+
+    # If auto_assign_mats is enabled and any groups are unassigned, assign mats to unassigned groups
+    if cfg.auto_assign_mats and cfg.mat_count and cfg.mat_count >= 1 and ordered_groups:
+        if any(g.mat_number is None for g in ordered_groups):
+            # If no groups had mats yet, do a full balanced pass; otherwise assign only the missing ones
+            if all(g.mat_number is None for g in ordered_groups):
+                assign_mats_to_groups(ordered_groups, mat_count=cfg.mat_count, strategy="balanced")
+            else:
+                mat_bouts: dict[int, int] = {m: 0 for m in range(1, cfg.mat_count + 1)}
+                for g in ordered_groups:
+                    if g.mat_number is not None and 1 <= g.mat_number <= cfg.mat_count:
+                        mat_bouts[g.mat_number] += max(1, len(g.bouts))
+                for idx, g in enumerate(ordered_groups):
+                    if g.mat_number is None:
+                        # Inherit adjacent group's mat in same division/age if available, else least-loaded mat
+                        adj_mat = None
+                        for neighbor in (ordered_groups[idx - 1] if idx > 0 else None, ordered_groups[idx + 1] if idx + 1 < len(ordered_groups) else None):
+                            if neighbor and neighbor.division == g.division and neighbor.age_group == g.age_group and neighbor.mat_number is not None:
+                                adj_mat = neighbor.mat_number
+                                break
+                        chosen_mat = adj_mat or min(range(1, cfg.mat_count + 1), key=lambda m: (mat_bouts[m], m))
+                        g.mat_number = chosen_mat
+                        mat_bouts[chosen_mat] += max(1, len(g.bouts))
 
     tournament.result.groups = ordered_groups
     # Keep flat wrestler list synchronized with groups
@@ -279,19 +302,42 @@ def import_spreadsheet_to_tournament(
             unlocked_wrestlers = [
                 w for w in wrestlers if (w.name.lower(), w.team_key, w.division) not in locked_keys
             ]
+            # Map previous mat assignments by wrestler key and bucket so unlocked wrestlers stay on their prior mats
+            prev_key_mat: dict[tuple[str, str, str], int] = {}
+            prev_bucket_mats: dict[tuple[str, str], list[int]] = defaultdict(list)
+            for g in tournament.result.groups:
+                if g.mat_number is not None:
+                    prev_bucket_mats[(g.division, g.age_group)].append(g.mat_number)
+                    for w in g.wrestlers:
+                        prev_key_mat[(w.name.lower(), w.team_key, w.division)] = g.mat_number
+
             partial_res = build_tournament_groups(
                 wrestlers=unlocked_wrestlers,
                 config=cfg,
                 source=source_str,
                 skipped_rows=skipped,
             )
+            for ng in partial_res.groups:
+                member_mats = [
+                    prev_key_mat[(w.name.lower(), w.team_key, w.division)]
+                    for w in ng.wrestlers
+                    if (w.name.lower(), w.team_key, w.division) in prev_key_mat
+                ]
+                if member_mats:
+                    ng.mat_number = max(set(member_mats), key=member_mats.count)
+                elif prev_bucket_mats.get((ng.division, ng.age_group)):
+                    b_mats = prev_bucket_mats[(ng.division, ng.age_group)]
+                    ng.mat_number = max(set(b_mats), key=b_mats.count)
+                else:
+                    ng.mat_number = None
+
             tournament.result.source = source_str
             tournament.result.skipped_rows = skipped
             tournament.result.groups = locked_groups + partial_res.groups
             reindex_and_refresh_all_groups(tournament, renumber_ids=True)
             tournament.log(
                 f"Synced spreadsheet ({len(wrestlers)} entries across {len(tabs)} tabs) "
-                f"preserving {len(locked_groups)} locked/tweaked bracket(s)."
+                f"preserving {len(locked_groups)} locked/tweaked bracket(s) and mat assignments."
             )
             save_tournament(tournament, base_dir)
             return tournament
@@ -357,6 +403,7 @@ def move_wrestler(
             rule=src_group.rule,
             locked=True,
             manually_modified=True,
+            mat_number=src_group.mat_number,
         )
         refresh_group(new_grp)
         tournament.result.groups.append(new_grp)
@@ -365,6 +412,27 @@ def move_wrestler(
         dst_group = next((g for g in tournament.result.groups if g.group_id == to_group_id), None)
         if dst_group is None:
             raise ValueError(f"Target bracket '{to_group_id}' not found.")
+        # Ensure wrestler does not already have an active entry in dst_group.division
+        existing_same_div = next(
+            (
+                g
+                for g in tournament.result.groups
+                if g.group_id != from_group_id
+                and g.division == dst_group.division
+                and any(
+                    cw.name.strip().lower() == wrestler.name.strip().lower()
+                    and cw.team_key == wrestler.team_key
+                    for cw in g.wrestlers
+                )
+            ),
+            None,
+        )
+        if existing_same_div is not None:
+            raise ValueError(
+                f"Cannot move {wrestler.name} into {dst_group.group_id} ({dst_group.division}) because "
+                f"{wrestler.name} is already in {existing_same_div.group_id} ({existing_same_div.division}). "
+                f"Each wrestler can be in at most 1 Coed and 1 Girls bracket."
+            )
         dst_group.wrestlers.append(wrestler)
         dst_group.manually_modified = True
         dst_group.locked = True
@@ -427,14 +495,116 @@ def merge_brackets(
     if src is None or dst is None:
         raise ValueError("Source or target bracket not found.")
 
+    # Guard against merging a wrestler into a division where they ALREADY have an active bracket
+    for w in src.wrestlers:
+        existing_same_div = next(
+            (
+                g
+                for g in tournament.result.groups
+                if g.group_id != source_group_id
+                and g.division == dst.division
+                and any(
+                    cw.name.strip().lower() == w.name.strip().lower()
+                    and cw.team_key == w.team_key
+                    for cw in g.wrestlers
+                )
+            ),
+            None,
+        )
+        if existing_same_div is not None:
+            raise ValueError(
+                f"Cannot merge {source_group_id} ({w.name}) into {target_group_id} ({dst.division}) "
+                f"because {w.name} is already in {existing_same_div.group_id} ({existing_same_div.division}). "
+                f"Each wrestler can be in at most 1 Coed and 1 Girls bracket."
+            )
+
     names = ", ".join(w.name for w in src.wrestlers)
     dst.wrestlers.extend(src.wrestlers)
+    if dst.mat_number is None and src.mat_number is not None:
+        dst.mat_number = src.mat_number
     src.wrestlers = []
     dst.manually_modified = True
     dst.locked = True
 
     reindex_and_refresh_all_groups(tournament, renumber_ids=renumber_ids)
     tournament.log(f"Merged bracket {source_group_id} ({names}) into {target_group_id}.")
+    save_tournament(tournament, base_dir)
+    return tournament
+
+
+def merge_multiple_brackets(
+    tournament: SavedTournament,
+    source_group_ids: list[str],
+    target_group_id: str,
+    renumber_ids: bool = False,
+    base_dir: Path = DEFAULT_STORE_DIR,
+) -> SavedTournament:
+    """Atomically merge all wrestlers from one or more `source_group_ids` into `target_group_id`."""
+    unique_sources = list(dict.fromkeys(gid for gid in source_group_ids if gid))
+    if not unique_sources:
+        raise ValueError("Select at least one source bracket to merge.")
+    if target_group_id in unique_sources:
+        raise ValueError("Target bracket cannot also be in the source brackets list.")
+
+    dst = next((g for g in tournament.result.groups if g.group_id == target_group_id), None)
+    if dst is None:
+        raise ValueError(f"Target bracket '{target_group_id}' not found.")
+
+    src_groups: list[BracketGroup] = []
+    for sid in unique_sources:
+        src = next((g for g in tournament.result.groups if g.group_id == sid), None)
+        if src is None:
+            raise ValueError(f"Source bracket '{sid}' not found.")
+        src_groups.append(src)
+
+    # Validate division uniqueness before mutating any group
+    seen_incoming: dict[tuple[str, str], str] = {}
+    for src in src_groups:
+        for w in src.wrestlers:
+            w_key = (w.name.strip().lower(), w.team_key)
+            if w_key in seen_incoming:
+                raise ValueError(
+                    f"Cannot merge {src.group_id} ({w.name}) into {target_group_id} ({dst.division}) "
+                    f"because {w.name} is also in {seen_incoming[w_key]}."
+                )
+            seen_incoming[w_key] = src.group_id
+
+            existing_same_div = next(
+                (
+                    g
+                    for g in tournament.result.groups
+                    if g.group_id != src.group_id
+                    and g.division == dst.division
+                    and any(
+                        cw.name.strip().lower() == w.name.strip().lower()
+                        and cw.team_key == w.team_key
+                        for cw in g.wrestlers
+                    )
+                ),
+                None,
+            )
+            if existing_same_div is not None:
+                raise ValueError(
+                    f"Cannot merge {src.group_id} ({w.name}) into {target_group_id} ({dst.division}) "
+                    f"because {w.name} is already in {existing_same_div.group_id} ({existing_same_div.division}). "
+                    f"Each wrestler can be in at most 1 Coed and 1 Girls bracket."
+                )
+
+    merged_names: list[str] = []
+    for src in src_groups:
+        merged_names.extend(w.name for w in src.wrestlers)
+        dst.wrestlers.extend(src.wrestlers)
+        if dst.mat_number is None and src.mat_number is not None:
+            dst.mat_number = src.mat_number
+        src.wrestlers = []
+
+    dst.manually_modified = True
+    dst.locked = True
+
+    reindex_and_refresh_all_groups(tournament, renumber_ids=renumber_ids)
+    tournament.log(
+        f"Merged {', '.join(unique_sources)} ({', '.join(merged_names)}) into {target_group_id}."
+    )
     save_tournament(tournament, base_dir)
     return tournament
 
@@ -467,6 +637,7 @@ def update_wrestler_in_bracket(
     team: str | None = None,
     skill_level: str | None = None,
     age_group: str | None = None,
+    division: str | None = None,
     base_dir: Path = DEFAULT_STORE_DIR,
 ) -> SavedTournament:
     """Update a wrestler's attributes (e.g. scale weight check adjustment) inside a bracket."""
@@ -485,7 +656,7 @@ def update_wrestler_in_bracket(
         skill_level=skill_level if skill_level is not None else old_w.skill_level,
         team=team.strip() if team is not None else old_w.team,
         team_tab=old_w.team_tab,
-        division=old_w.division,
+        division=division if division is not None else old_w.division,
         age=old_w.age,
         is_dual_entry=old_w.is_dual_entry,
         source_row=old_w.source_row,
@@ -495,11 +666,34 @@ def update_wrestler_in_bracket(
     grp.wrestlers = [new_w if w.id == wrestler_id else w for w in grp.wrestlers]
     grp.manually_modified = True
     reindex_and_refresh_all_groups(tournament, renumber_ids=False)
+    changes = [f"weight: {old_w.weight:g} -> {new_w.weight:g} lbs"]
+    if old_w.skill_level != new_w.skill_level:
+        changes.append(f"skill: {old_w.skill_level} -> {new_w.skill_level}")
+    if old_w.age_group != new_w.age_group:
+        changes.append(f"age: {old_w.age_group} -> {new_w.age_group}")
+    if old_w.division != new_w.division:
+        changes.append(f"division: {old_w.division} -> {new_w.division}")
     tournament.log(
-        f"Updated wrestler {new_w.name} in {group_id} (weight: {old_w.weight:g} -> {new_w.weight:g} lbs)."
+        f"Updated wrestler {new_w.name} in {group_id} ({', '.join(changes)})."
     )
     save_tournament(tournament, base_dir)
     return tournament
+
+
+def _resolve_inherited_mat(
+    wrestlers: list[Wrestler],
+    wrestler_mat_map: dict[str, int],
+    fallback_mats: list[int],
+    idx: int = 0,
+) -> int | None:
+    """Determine the best mat_number for a newly formed pod from its wrestlers' prior mat assignments."""
+    member_mats = [wrestler_mat_map[w.id] for w in wrestlers if w.id in wrestler_mat_map]
+    if member_mats:
+        # Pick the modal (most common) mat among the wrestlers in this pod
+        return max(set(member_mats), key=member_mats.count)
+    if fallback_mats:
+        return fallback_mats[min(idx, len(fallback_mats) - 1)]
+    return None
 
 
 def regenerate_brackets_by_ids(
@@ -517,6 +711,8 @@ def regenerate_brackets_by_ids(
     """Regenerate specific bracket(s) by their ID(s) using the Madison grouping engine.
 
     - Collects all wrestlers from the specified `group_ids`.
+    - Preserves the mat assignments (`mat_number`) of the selected brackets so regenerated
+      pods stay on the same scoring table/mat.
     - If `combine_across_skills_or_ages` is True, pools all wrestlers from the selected
       bracket IDs together into the first selected bracket's (division, age_group, skill_level)
       and re-runs Madison partitioning on the combined pool.
@@ -531,6 +727,14 @@ def regenerate_brackets_by_ids(
 
     remaining_groups = [g for g in tournament.result.groups if g.group_id.upper() not in id_set]
     cfg = tournament.config
+
+    wrestler_mat_map: dict[str, int] = {
+        w.id: g.mat_number
+        for g in selected_groups
+        if g.mat_number is not None
+        for w in g.wrestlers
+    }
+    selected_mats = [g.mat_number for g in selected_groups if g.mat_number is not None]
 
     def _apply_rule_overrides(base_rule: GroupRuleConfig) -> GroupRuleConfig:
         r = GroupRuleConfig.from_dict(base_rule.to_dict())
@@ -565,6 +769,7 @@ def regenerate_brackets_by_ids(
             gid = _make_group_id(div, age_grp, skill, 90 + idx)
             b_fmt = resolve_bracket_format(len(sw), rule.bracket_format)
             bouts = generate_bouts_for_group(sw, b_fmt)
+            inherited_mat = _resolve_inherited_mat(sw, wrestler_mat_map, selected_mats, idx - 1)
             new_groups.append(
                 BracketGroup(
                     group_id=gid,
@@ -577,12 +782,16 @@ def regenerate_brackets_by_ids(
                     bracket_format=b_fmt,
                     bouts=bouts,
                     fixed_class_label=flabel,
+                    mat_number=inherited_mat,
                 )
             )
     else:
         buckets: dict[tuple[str, str, str], list[Wrestler]] = defaultdict(list)
+        bucket_mats: dict[tuple[str, str, str], list[int]] = defaultdict(list)
         for g in selected_groups:
             buckets[(g.division, g.age_group, g.skill_level)].extend(g.wrestlers)
+            if g.mat_number is not None:
+                bucket_mats[(g.division, g.age_group, g.skill_level)].append(g.mat_number)
 
         for (div, age_grp, skill), pool in buckets.items():
             pool.sort(key=lambda w: (w.weight, w.team_key, w.name))
@@ -594,10 +803,12 @@ def regenerate_brackets_by_ids(
                 raw_slices = optimize_adjacent_teammate_swaps(raw_slices, rule)
                 slices = [(None, s) for s in raw_slices]
 
+            b_mats = bucket_mats.get((div, age_grp, skill), selected_mats)
             for idx, (flabel, sw) in enumerate(slices, start=1):
                 gid = _make_group_id(div, age_grp, skill, 90 + idx)
                 b_fmt = resolve_bracket_format(len(sw), rule.bracket_format)
                 bouts = generate_bouts_for_group(sw, b_fmt)
+                inherited_mat = _resolve_inherited_mat(sw, wrestler_mat_map, b_mats, idx - 1)
                 new_groups.append(
                     BracketGroup(
                         group_id=gid,
@@ -610,6 +821,7 @@ def regenerate_brackets_by_ids(
                         bracket_format=b_fmt,
                         bouts=bouts,
                         fixed_class_label=flabel,
+                        mat_number=inherited_mat,
                     )
                 )
 
@@ -618,7 +830,7 @@ def regenerate_brackets_by_ids(
     w_count = sum(len(g.wrestlers) for g in new_groups)
     tournament.log(
         f"Regenerated {len(selected_groups)} bracket(s) ({', '.join(g.group_id for g in selected_groups)}) "
-        f"-> {len(new_groups)} bracket(s) covering {w_count} wrestlers."
+        f"-> {len(new_groups)} bracket(s) covering {w_count} wrestlers (preserved mat assignments)."
     )
     save_tournament(tournament, base_dir)
     return tournament
@@ -634,6 +846,7 @@ def reoptimize_active_brackets(
     min_group_size: int | None = None,
     max_weight_spread_pct: float | None = None,
     separate_teammates: bool | None = None,
+    blend_skills: bool | None = None,
     base_dir: Path = DEFAULT_STORE_DIR,
 ) -> tuple[SavedTournament, int, int]:
     """Re-run Madison grouping on active wrestlers in the specified scope (division/age or whole tournament).
@@ -641,7 +854,8 @@ def reoptimize_active_brackets(
     - Excludes scratched wrestlers (they are already removed from active groups).
     - Includes all active walk-ins.
     - If preserve_locked is True, brackets marked locked/manually modified are preserved untouched.
-    - Regroups the unlocked active wrestlers using Madison dynamic programming.
+    - Regroups the unlocked active wrestlers using Madison dynamic programming while keeping
+      each newly formed bracket on the mat its wrestlers/age-group were already assigned to.
     - Returns (tournament, original_bracket_count_in_scope, new_bracket_count_in_scope).
     """
     cfg = tournament.config
@@ -675,6 +889,18 @@ def reoptimize_active_brackets(
     if not pool:
         raise ValueError("No active wrestlers found in the selected unlocked brackets.")
 
+    # Capture existing mat assignments from unlocked_in_scope so re-optimized pods stay on their prior mats
+    wrestler_mat_map: dict[str, int] = {
+        w.id: g.mat_number
+        for g in unlocked_in_scope
+        if g.mat_number is not None
+        for w in g.wrestlers
+    }
+    bucket_mats: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for g in matching_groups:
+        if g.mat_number is not None:
+            bucket_mats[(g.division, g.age_group)].append(g.mat_number)
+
     re_cfg = TournamentConfig.from_dict(cfg.to_dict())
     if target_group_size is not None:
         re_cfg.default_rule.target_group_size = target_group_size
@@ -686,12 +912,23 @@ def reoptimize_active_brackets(
         re_cfg.default_rule.max_weight_spread_pct = max_weight_spread_pct
     if separate_teammates is not None:
         re_cfg.default_rule.separate_teammates = separate_teammates
+    if blend_skills is not None:
+        re_cfg.blend_skills_to_fill_brackets = blend_skills
+        cfg.blend_skills_to_fill_brackets = blend_skills
 
     new_res = build_tournament_groups(
         wrestlers=pool,
         config=re_cfg,
         source=tournament.result.source,
     )
+
+    # Restore sticky mat assignments onto new_res.groups so mats don't get reshuffled
+    if wrestler_mat_map or bucket_mats:
+        for idx, ng in enumerate(new_res.groups):
+            b_mats = bucket_mats.get((ng.division, ng.age_group), [])
+            inherited_mat = _resolve_inherited_mat(ng.wrestlers, wrestler_mat_map, b_mats, idx)
+            if inherited_mat is not None:
+                ng.mat_number = inherited_mat
 
     tournament.result.groups = other_groups + locked_in_scope + new_res.groups
     reindex_and_refresh_all_groups(tournament, renumber_ids=True)
@@ -706,7 +943,7 @@ def reoptimize_active_brackets(
     tournament.log(
         f"Re-optimized {len(unlocked_in_scope)} bracket(s) in {scope_str} "
         f"({len(pool)} wrestlers) -> {len(new_res.groups)} bracket(s) "
-        f"(preserved {len(locked_in_scope)} locked)."
+        f"(preserved {len(locked_in_scope)} locked and kept mat assignments)."
     )
     save_tournament(tournament, base_dir)
     return tournament, len(unlocked_in_scope), len(new_res.groups)
@@ -752,6 +989,8 @@ def find_candidate_brackets_for_walkin(
         candidates.append(
             {
                 "group_id": g.group_id,
+                "mat_number": g.mat_number,
+                "mat_label": g.mat_label,
                 "current_size": g.size,
                 "max_size": g.rule.max_group_size,
                 "current_weights": g.weight_label,
@@ -840,6 +1079,17 @@ def add_walkin_wrestler(
             next_idx += 1
             new_gid = _make_group_id(division, age_group, skill_level, next_idx)
 
+        # Inherit mat from the closest-weight bracket in the same division/age if available
+        same_age_groups = [
+            g
+            for g in tournament.result.groups
+            if g.division == division and g.age_group == age_group and g.mat_number is not None
+        ]
+        inherited_mat = None
+        if same_age_groups:
+            closest_grp = min(same_age_groups, key=lambda g: abs(g.min_weight - wrestler.weight))
+            inherited_mat = closest_grp.mat_number
+
         rule = tournament.config.resolve_rule(division, age_group, skill_level)
         new_grp = BracketGroup(
             group_id=new_gid,
@@ -851,6 +1101,7 @@ def add_walkin_wrestler(
             rule=rule,
             locked=True,
             manually_modified=True,
+            mat_number=inherited_mat,
         )
         refresh_group(new_grp)
         tournament.result.groups.append(new_grp)
@@ -883,6 +1134,7 @@ def scratch_wrestler(
 ) -> tuple[SavedTournament, list[str]]:
     """Scratch/remove a wrestler from bracket(s) and save to scratched records."""
     scratched_from_gids: list[str] = []
+    original_mats: dict[str, int | None] = {}
     affected_wrestlers: list[Wrestler] = []
 
     for g in list(tournament.result.groups):
@@ -892,7 +1144,9 @@ def scratch_wrestler(
         if found:
             g.wrestlers = [w for w in g.wrestlers if w.id != wrestler_id]
             g.manually_modified = True
+            g.locked = True
             scratched_from_gids.append(g.group_id)
+            original_mats[g.group_id] = g.mat_number
             affected_wrestlers.append(found)
             if not scratch_all_divisions:
                 break
@@ -914,6 +1168,7 @@ def scratch_wrestler(
             "age": w.age,
             "is_dual_entry": w.is_dual_entry,
             "original_groups": scratched_from_gids,
+            "original_mats": original_mats,
             "scratched_at": _now_iso(),
             "reason": reason,
         }
@@ -953,8 +1208,9 @@ def restore_scratched_wrestler(
 
     # If AUTO, try restoring to one of their original brackets if still present
     chosen_gid = target_group_id
+    orig_gids = record.get("original_groups", [])
+    orig_mats = record.get("original_mats", {}) or {}
     if chosen_gid == "AUTO":
-        orig_gids = record.get("original_groups", [])
         existing_gids = {g.group_id for g in tournament.result.groups}
         for og in orig_gids:
             if og in existing_gids:
@@ -970,7 +1226,12 @@ def restore_scratched_wrestler(
             if (g.division, g.age_group, g.skill_level) == (w.division, w.age_group, w.skill_level)
         ]
         next_idx = max((g.group_index for g in bucket_groups), default=0) + 1
-        new_gid = _make_group_id(w.division, w.age_group, w.skill_level, next_idx)
+        new_gid = (
+            orig_gids[0]
+            if (orig_gids and orig_gids[0] != "NO MATCH" and orig_gids[0] not in {g.group_id for g in tournament.result.groups})
+            else _make_group_id(w.division, w.age_group, w.skill_level, next_idx)
+        )
+        restored_mat = next((orig_mats.get(og) for og in orig_gids if orig_mats.get(og) is not None), None)
         rule = tournament.config.resolve_rule(w.division, w.age_group, w.skill_level)
         new_grp = BracketGroup(
             group_id=new_gid,
@@ -982,6 +1243,7 @@ def restore_scratched_wrestler(
             rule=rule,
             locked=True,
             manually_modified=True,
+            mat_number=restored_mat,
         )
         refresh_group(new_grp)
         tournament.result.groups.append(new_grp)
@@ -998,4 +1260,496 @@ def restore_scratched_wrestler(
     tournament.log(f"Restored previously scratched wrestler {w.name} back into {chosen_gid}.")
     save_tournament(tournament, base_dir)
     return tournament, chosen_gid
+
+
+def assign_brackets_to_mats(
+    tournament: SavedTournament,
+    mat_count: int | None = None,
+    strategy: str = "balanced",
+    division: str | None = None,
+    age_group: str | None = None,
+    skill_level: str | None = None,
+    preserve_locked: bool = False,
+    lock_assigned: bool = False,
+    base_dir: Path = DEFAULT_STORE_DIR,
+) -> SavedTournament:
+    """Assign brackets in `tournament` (or a division/age/skill subset) to mats `1..mat_count`."""
+    if mat_count is not None and mat_count >= 1:
+        tournament.config.mat_count = int(mat_count)
+    effective_mats = max(1, int(tournament.config.mat_count))
+
+    target_groups = [
+        g
+        for g in tournament.result.groups
+        if (division is None or division in ("", "All", "ALL") or g.division == division)
+        and (age_group is None or age_group in ("", "All", "ALL") or g.age_group == age_group)
+        and (skill_level is None or skill_level in ("", "All", "ALL") or g.skill_level == skill_level)
+    ]
+    if not target_groups:
+        raise ValueError("No brackets match the selected division/age/skill filter for mat assignment.")
+
+    assign_mats_to_groups(
+        target_groups,
+        mat_count=effective_mats,
+        strategy=strategy,
+        preserve_existing_locked=preserve_locked,
+    )
+    if lock_assigned:
+        for g in target_groups:
+            if g.mat_number is not None:
+                g.locked = True
+
+    scope_lbl = "All Brackets"
+    if division and division not in ("All", "ALL"):
+        scope_lbl = division
+    if age_group and age_group not in ("All", "ALL"):
+        scope_lbl = f"{scope_lbl} {age_group}" if scope_lbl != "All Brackets" else age_group
+    if skill_level and skill_level not in ("All", "ALL"):
+        scope_lbl = f"{scope_lbl} {skill_level}" if scope_lbl != "All Brackets" else skill_level
+
+    lock_note = ", locked assignments" if lock_assigned else ""
+    tournament.log(
+        f"Assigned {len(target_groups)} bracket(s) ({scope_lbl}) across {effective_mats} mat(s) "
+        f"(strategy: {strategy}{lock_note})."
+    )
+    save_tournament(tournament, base_dir)
+    return tournament
+
+
+def set_bracket_mat(
+    tournament: SavedTournament,
+    group_ids: list[str] | str,
+    mat_number: int | None,
+    lock_bracket: bool = True,
+    base_dir: Path = DEFAULT_STORE_DIR,
+) -> SavedTournament:
+    """Manually assign one or more bracket IDs to a specific Mat / Table number (or None to unassign)."""
+    if isinstance(group_ids, str):
+        group_ids = [group_ids]
+    target_set = set(group_ids)
+    updated: list[str] = []
+    for g in tournament.result.groups:
+        if g.group_id in target_set:
+            g.mat_number = int(mat_number) if mat_number is not None else None
+            if lock_bracket and mat_number is not None:
+                g.locked = True
+            updated.append(g.group_id)
+
+    if not updated:
+        raise ValueError(f"Bracket(s) not found: {', '.join(group_ids)}")
+
+    mat_str = f"Mat {mat_number}" if mat_number is not None else "Unassigned"
+    tournament.log(f"Assigned bracket(s) {', '.join(updated)} -> {mat_str}.")
+    save_tournament(tournament, base_dir)
+    return tournament
+
+
+def search_tournament_wrestlers(
+    tournament: SavedTournament,
+    query: str = "",
+    division: str = "All",
+    age_group: str = "All",
+    skill_level: str = "All",
+    team: str = "All",
+    status: str = "All",
+    mat_number: str | int = "All",
+) -> list[dict[str, Any]]:
+    """Search active and scratched wrestlers in `tournament` with full bracket, mat, and bout context.
+
+    `status`:
+      - `"All"`: Active and Scratched entries
+      - `"Active"`: Only active entries in brackets
+      - `"Scratched"`: Only scratched entries
+      - `"Flagged"`: Only active entries in brackets with warnings/flags
+      - `"Dual-Entry"`: Only dual-entry wrestlers
+    """
+    q = query.strip().lower()
+    tokens = [tok for tok in q.split() if tok]
+    results: list[dict[str, Any]] = []
+
+    def _matches_query(fields: list[str]) -> bool:
+        if not q:
+            return True
+        lowered_fields = [f.lower() for f in fields if f]
+        combined = " ".join(lowered_fields)
+        if q in combined:
+            return True
+        words = re.findall(r"[a-z0-9.\-]+", combined)
+        return all(
+            any((w == tok if len(tok) == 1 else tok in w) for w in words)
+            for tok in tokens
+        )
+
+    if status in ("All", "Active", "Flagged", "Dual-Entry"):
+        for g in tournament.result.groups:
+            if division != "All" and g.division != division:
+                continue
+            if age_group != "All" and g.age_group != age_group:
+                continue
+            if skill_level != "All" and g.skill_level != skill_level:
+                continue
+            if status == "Flagged" and not g.has_warnings:
+                continue
+            if mat_number != "All":
+                if str(mat_number) == "Unassigned":
+                    if g.mat_number is not None:
+                        continue
+                else:
+                    mat_int = int(str(mat_number).replace("Mat", "").strip())
+                    if g.mat_number != mat_int:
+                        continue
+
+            for seed_idx, w in enumerate(g.wrestlers, start=1):
+                if status == "Dual-Entry" and not w.is_dual_entry:
+                    continue
+                if team != "All" and w.display_team != team and w.team != team:
+                    continue
+                mat_search_token = f"mat {g.mat_number} mat{g.mat_number}" if g.mat_number else "unassigned"
+                if not _matches_query(
+                    [
+                        w.id,
+                        w.name,
+                        w.team,
+                        w.team_tab,
+                        w.display_team,
+                        g.group_id,
+                        g.division,
+                        g.age_group,
+                        g.skill_level,
+                        f"{w.weight:g}",
+                        mat_search_token,
+                    ]
+                ):
+                    continue
+
+                w_bouts: list[dict[str, Any]] = []
+                for b in g.bouts:
+                    if b.wrestler_a.id == w.id:
+                        opp = b.wrestler_b
+                        w_bouts.append(
+                            {
+                                "bout_number": b.bout_number,
+                                "round_number": b.round_number,
+                                "opponent_name": opp.name if opp else "BYE",
+                                "opponent_weight": opp.weight if opp else None,
+                                "opponent_team": opp.display_team if opp else "",
+                                "is_teammate": b.is_teammate_match,
+                            }
+                        )
+                    elif b.wrestler_b and b.wrestler_b.id == w.id:
+                        opp = b.wrestler_a
+                        w_bouts.append(
+                            {
+                                "bout_number": b.bout_number,
+                                "round_number": b.round_number,
+                                "opponent_name": opp.name,
+                                "opponent_weight": opp.weight,
+                                "opponent_team": opp.display_team,
+                                "is_teammate": b.is_teammate_match,
+                            }
+                        )
+
+                results.append(
+                    {
+                        "status": "Active",
+                        "wrestler": w,
+                        "group": g,
+                        "group_id": g.group_id,
+                        "mat_number": g.mat_number,
+                        "seed": seed_idx,
+                        "bouts": w_bouts,
+                        "scratch_index": None,
+                        "scratch_record": None,
+                    }
+                )
+
+    if status in ("All", "Scratched", "No Match", "Dual-Entry", "Flagged") and mat_number == "All":
+        for s_idx, rec in enumerate(tournament.scratched_wrestlers):
+            is_no_match = rec.get("entry_status") == "no_match"
+            rec_status_label = "No Match" if is_no_match else "Scratched"
+            if status == "Scratched" and is_no_match:
+                continue
+            if status in ("No Match", "Flagged") and not is_no_match:
+                continue
+            if status == "Dual-Entry" and not rec.get("is_dual_entry", False):
+                continue
+            r_div = str(rec.get("division", "Coed"))
+            r_age = str(rec.get("age_group", ""))
+            r_skill = str(rec.get("skill_level", ""))
+            r_team = str(rec.get("team", ""))
+            if division != "All" and r_div != division:
+                continue
+            if age_group != "All" and r_age != age_group:
+                continue
+            if skill_level != "All" and r_skill != skill_level:
+                continue
+            if team != "All" and r_team != team:
+                continue
+
+            orig_groups_str = "NO MATCH" if is_no_match else " ".join(rec.get("original_groups", []))
+            if not _matches_query(
+                [
+                    str(rec.get("id", "")),
+                    str(rec.get("name", "")),
+                    r_team,
+                    orig_groups_str,
+                    "no match" if is_no_match else "scratched",
+                    r_div,
+                    r_age,
+                    r_skill,
+                    str(rec.get("weight", "")),
+                    str(rec.get("reason", "")),
+                ]
+            ):
+                continue
+
+            w_scratched = Wrestler(
+                id=str(rec.get("id", "")),
+                name=str(rec.get("name", "")),
+                weight=float(rec.get("weight", 0.0)),
+                age_group=r_age,
+                skill_level=r_skill,
+                team=r_team,
+                team_tab="No Match" if is_no_match else "Scratched",
+                division=r_div,
+                age=rec.get("age"),
+                is_dual_entry=bool(rec.get("is_dual_entry", False)),
+            )
+            results.append(
+                {
+                    "status": rec_status_label,
+                    "wrestler": w_scratched,
+                    "group": None,
+                    "group_id": "NO MATCH" if is_no_match else ", ".join(rec.get("original_groups", [])),
+                    "mat_number": None,
+                    "seed": None,
+                    "bouts": [],
+                    "scratch_index": s_idx,
+                    "scratch_record": rec,
+                }
+            )
+
+    results.sort(
+        key=lambda item: (
+            0 if item["status"] in ("Active", "No Match") else 1,
+            item["wrestler"].name.lower(),
+            item["wrestler"].division,
+            item["wrestler"].weight,
+        )
+    )
+    return results
+
+
+def find_duplicate_division_entries(
+    tournament: SavedTournament,
+) -> list[dict[str, Any]]:
+    """Find any wrestler who appears in more than 1 active bracket of the same division (Coed or Girls)."""
+    by_w_div: dict[tuple[str, str, str], list[tuple[BracketGroup, Wrestler]]] = {}
+    for g in tournament.result.groups:
+        for w in g.wrestlers:
+            key = (w.name.strip().lower(), w.team_key, g.division)
+            by_w_div.setdefault(key, []).append((g, w))
+
+    duplicates: list[dict[str, Any]] = []
+    for (name_lower, team_key, bracket_div), entries in by_w_div.items():
+        if len(entries) > 1:
+            duplicates.append(
+                {
+                    "name": entries[0][1].name,
+                    "team_key": team_key,
+                    "bracket_division": bracket_div,
+                    "entries": entries,
+                }
+            )
+    return duplicates
+
+
+def enforce_max_one_bracket_per_division(
+    tournament: SavedTournament,
+    base_dir: Path = DEFAULT_STORE_DIR,
+) -> tuple[SavedTournament, list[str]]:
+    """Ensure every wrestler is in at most 1 Coed bracket and at most 1 Girls bracket.
+
+    - If a dual-entry wrestler had their Girls entry merged into a Coed bracket while already
+      in another Coed bracket (e.g. Kai McBride or Kenlea McBride), removes the misplaced
+      Girls entry from the second Coed bracket and either:
+        1. Places it into the best compatible Girls bracket (same or adjacent age group within
+           weight spread tolerance), OR
+        2. Marks the unmatched entry with `entry_status="no_match"` (`NO MATCH`) if no Girls
+           bracket is within safe weight range.
+    - If a wrestler has two identical-division entries in the same division, removes the duplicate.
+    """
+    cfg = tournament.config
+    age_order = {ag: i for i, ag in enumerate(cfg.age_groups)}
+    actions: list[str] = []
+
+    duplicates = find_duplicate_division_entries(tournament)
+    if not duplicates:
+        return tournament, actions
+
+    for dup_info in duplicates:
+        bracket_div = dup_info["bracket_division"]
+        entries: list[tuple[BracketGroup, Wrestler]] = dup_info["entries"]
+        # Sort so native entry (w.division == g.division) is kept first
+        entries_sorted = sorted(
+            entries,
+            key=lambda gw: (0 if gw[1].division == gw[0].division else 1, gw[0].group_id),
+        )
+        kept_group, kept_w = entries_sorted[0]
+
+        for dup_group, dup_w in entries_sorted[1:]:
+            dup_group.wrestlers = [w for w in dup_group.wrestlers if w.id != dup_w.id]
+            dup_group.manually_modified = True
+            dup_group.locked = True
+
+            # Check if dup_w was originally registered for another division (e.g. Girls)
+            # and whether this wrestler already has an active bracket in dup_w.division
+            already_in_native_div = any(
+                g.division == dup_w.division
+                and g.size > 0
+                and any(
+                    cw.name.strip().lower() == dup_w.name.strip().lower()
+                    and cw.team_key == dup_w.team_key
+                    for cw in g.wrestlers
+                )
+                for g in tournament.result.groups
+            )
+
+            if dup_w.division != bracket_div and not already_in_native_div:
+                # Find best compatible bracket in dup_w.division (e.g. Girls)
+                w_age_idx = age_order.get(dup_w.age_group, -99)
+                best_cand: BracketGroup | None = None
+                best_score = 999999.0
+                for cand in tournament.result.groups:
+                    if cand.division != dup_w.division or cand.size == 0:
+                        continue
+                    if cand.size >= cand.rule.max_group_size:
+                        continue
+                    cand_age_idx = age_order.get(cand.age_group, -99)
+                    age_diff = abs(cand_age_idx - w_age_idx)
+                    if age_diff > 1:
+                        continue
+                    new_min = min(cand.min_weight, dup_w.weight)
+                    new_max = max(cand.max_weight, dup_w.weight)
+                    spread_pct = ((new_max - new_min) / new_min * 100.0) if new_min > 0 else 0.0
+                    max_pct = cand.rule.effective_max_spread_pct(new_min) or 12.0
+                    if spread_pct > max_pct * 1.35:
+                        continue
+                    score = age_diff * 25.0 + (0.0 if cand.skill_level == dup_w.skill_level else 10.0) + spread_pct * 2.0
+                    if score < best_score:
+                        best_score = score
+                        best_cand = cand
+
+                if best_cand is not None:
+                    best_cand.wrestlers.append(dup_w)
+                    best_cand.manually_modified = True
+                    best_cand.locked = True
+                    msg = (
+                        f"Re-homed {dup_w.name} ({dup_w.id}, {dup_w.weight:g} lbs {dup_w.division}) "
+                        f"from duplicate {bracket_div} bracket {dup_group.group_id} -> {best_cand.group_id} "
+                        f"(keeping {kept_w.name} in {kept_group.group_id})."
+                    )
+                    actions.append(msg)
+                    tournament.log(msg)
+                else:
+                    tournament.scratched_wrestlers.append(
+                        {
+                            "id": dup_w.id,
+                            "name": dup_w.name,
+                            "weight": dup_w.weight,
+                            "age_group": dup_w.age_group,
+                            "skill_level": dup_w.skill_level,
+                            "team": dup_w.team_key,
+                            "division": dup_w.division,
+                            "age": dup_w.age,
+                            "is_dual_entry": dup_w.is_dual_entry,
+                            "entry_status": "no_match",
+                            "original_groups": ["NO MATCH"],
+                            "original_mats": {},
+                            "reason": (
+                                f"NO MATCH — No {dup_w.division} opponent within weight range "
+                                f"(active in {kept_group.group_id})"
+                            ),
+                            "scratched_at": _now_iso(),
+                        }
+                    )
+                    msg = (
+                        f"Marked {dup_w.name} ({dup_w.id}, {dup_w.weight:g} lbs {dup_w.division}) as NO MATCH "
+                        f"(removed duplicate {bracket_div} entry from {dup_group.group_id}; kept active in {kept_group.group_id})."
+                    )
+                    actions.append(msg)
+                    tournament.log(msg)
+            else:
+                msg = (
+                    f"Removed duplicate {bracket_div} entry for {dup_w.name} ({dup_w.id}, {dup_w.weight:g} lbs) "
+                    f"from {dup_group.group_id} (kept in {kept_group.group_id})."
+                )
+                actions.append(msg)
+                tournament.log(msg)
+
+    reindex_and_refresh_all_groups(tournament, renumber_ids=False)
+    save_tournament(tournament, base_dir)
+    return tournament, actions
+
+
+def verify_tournament_roster_and_brackets(
+    tournament: SavedTournament,
+) -> dict[str, Any]:
+    """Verify tournament integrity:
+
+    1. Checks all registered/active wrestlers are in at least one bracket.
+    2. Identifies any unbracketed wrestlers (in result.wrestlers but missing from groups).
+    3. Identifies NO MATCH entries in scratched_wrestlers (entry_status == 'no_match').
+    4. Identifies solo (1-man) brackets where a wrestler has no opponents.
+    5. Identifies duplicate division entries (more than 1 Coed or Girls bracket).
+    """
+    dup_div_entries = find_duplicate_division_entries(tournament)
+
+    # Map wrestler ids to brackets
+    bracketed_wrestler_ids: dict[str, list[BracketGroup]] = defaultdict(list)
+    for g in tournament.result.groups:
+        for w in g.wrestlers:
+            bracketed_wrestler_ids[w.id].append(g)
+
+    # Check for unbracketed in tournament.result.wrestlers
+    unbracketed: list[Wrestler] = []
+    seen_unbracketed_ids = set()
+    for w in tournament.result.wrestlers:
+        if w.id not in bracketed_wrestler_ids and w.id not in seen_unbracketed_ids:
+            unbracketed.append(w)
+            seen_unbracketed_ids.add(w.id)
+
+    # Check NO MATCH entries in scratched_wrestlers
+    no_match_entries: list[dict[str, Any]] = [
+        sc for sc in tournament.scratched_wrestlers if sc.get("entry_status") == "no_match"
+    ]
+
+    # Check solo (1-man) brackets
+    solo_brackets: list[BracketGroup] = [g for g in tournament.result.groups if g.size == 1]
+
+    # Scratches (excluding no_match)
+    actual_scratches = [
+        sc for sc in tournament.scratched_wrestlers if sc.get("entry_status") != "no_match"
+    ]
+
+    total_active_wrestlers = sum(g.size for g in tournament.result.groups)
+    all_clear = (
+        len(dup_div_entries) == 0
+        and len(unbracketed) == 0
+        and len(no_match_entries) == 0
+        and len(solo_brackets) == 0
+    )
+
+    return {
+        "all_clear": all_clear,
+        "total_active_wrestlers": total_active_wrestlers,
+        "total_brackets": len(tournament.result.groups),
+        "dup_div_entries": dup_div_entries,
+        "unbracketed_wrestlers": unbracketed,
+        "no_match_entries": no_match_entries,
+        "solo_brackets": solo_brackets,
+        "scratched_count": len(actual_scratches),
+    }
+
+
 

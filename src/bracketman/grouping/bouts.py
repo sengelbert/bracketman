@@ -9,6 +9,8 @@ def resolve_bracket_format(size: int, configured_format: str = "auto") -> str:
     """Resolve the effective bracket format for a group of a given size."""
     if size <= 1:
         return "uncontested"
+    if size == 2:
+        return "best_of_3"
     if configured_format != "auto":
         return configured_format
     if size <= 5:
@@ -19,7 +21,7 @@ def resolve_bracket_format(size: int, configured_format: str = "auto") -> str:
 def generate_round_robin_bouts(wrestlers: list[Wrestler]) -> list[Bout]:
     """Generate balanced round-robin bouts using the circle method.
 
-    For 2 wrestlers: 2 bouts (best 2-of-3 format) or 1 bout.
+    For 2 wrestlers: 3 bouts (Best 2 out of 3 series).
     For 3-5 wrestlers: standard round-robin rounds.
     """
     n = len(wrestlers)
@@ -27,10 +29,11 @@ def generate_round_robin_bouts(wrestlers: list[Wrestler]) -> list[Bout]:
         return []
 
     if n == 2:
-        # Standard youth 2-man bracket: Best 2 of 3
+        # Standard youth 2-man bracket: Best 2 out of 3 series
         return [
             Bout(bout_number=1, round_number=1, wrestler_a=wrestlers[0], wrestler_b=wrestlers[1]),
             Bout(bout_number=2, round_number=2, wrestler_a=wrestlers[1], wrestler_b=wrestlers[0]),
+            Bout(bout_number=3, round_number=3, wrestler_a=wrestlers[0], wrestler_b=wrestlers[1]),
         ]
 
     # Circle method; add None (BYE) if odd number of wrestlers

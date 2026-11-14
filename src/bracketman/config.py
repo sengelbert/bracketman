@@ -99,6 +99,9 @@ class TournamentConfig:
     age_group_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
     allow_skill_merge_for_stragglers: bool = False
     allow_age_merge_for_stragglers: bool = False
+    blend_skills_to_fill_brackets: bool = False
+    mat_count: int = 4
+    auto_assign_mats: bool = True
 
     def normalize_skill(self, raw_value: str) -> str:
         """Map raw skill/ability string (e.g. 'Novice', 'experianced') to canonical skill level."""
@@ -199,6 +202,9 @@ class TournamentConfig:
             "age_group_rules": dict(self.age_group_overrides),
             "allow_skill_merge_for_stragglers": self.allow_skill_merge_for_stragglers,
             "allow_age_merge_for_stragglers": self.allow_age_merge_for_stragglers,
+            "blend_skills_to_fill_brackets": self.blend_skills_to_fill_brackets,
+            "mat_count": self.mat_count,
+            "auto_assign_mats": self.auto_assign_mats,
         }
 
     @classmethod
@@ -254,6 +260,12 @@ class TournamentConfig:
             cfg.allow_skill_merge_for_stragglers = bool(data["allow_skill_merge_for_stragglers"])
         if "allow_age_merge_for_stragglers" in data:
             cfg.allow_age_merge_for_stragglers = bool(data["allow_age_merge_for_stragglers"])
+        if "blend_skills_to_fill_brackets" in data:
+            cfg.blend_skills_to_fill_brackets = bool(data["blend_skills_to_fill_brackets"])
+        if "mat_count" in data and data["mat_count"] is not None:
+            cfg.mat_count = max(1, int(data["mat_count"]))
+        if "auto_assign_mats" in data:
+            cfg.auto_assign_mats = bool(data["auto_assign_mats"])
 
         return cfg
 

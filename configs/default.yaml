@@ -59,9 +59,14 @@ defaults:
   separate_teammates: true      # Minimize same-club wrestlers in the same bracket group
   bracket_format: "auto"        # "auto", "round_robin", or "bracket_8"
 
-# Straggler handling options
+# Skill blending & straggler handling options (Priority: Division [Locked] > Weight > Age > Skill > Team)
+blend_skills_to_fill_brackets: true      # Blend Beginner & Advanced within same age group when needed to avoid 2-man pods & tighten weights
 allow_skill_merge_for_stragglers: false  # Set true to auto-merge solo Advanced/Beginner kids of same age/weight
 allow_age_merge_for_stragglers: false    # Set true to auto-merge solo kids into adjacent age group if weight fits
+
+# Mat / Table Assignment Configuration
+mat_count: 4                             # Number of mats/tables running at the tournament
+auto_assign_mats: true                   # Automatically balance brackets & bouts across mats 1..mat_count
 
 # Division-specific rule overrides
 division_rules:

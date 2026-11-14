@@ -14,7 +14,7 @@ import click
 from bracketman.config import TournamentConfig
 from bracketman.exporters.console import format_summary_report
 from bracketman.exporters.csv_xlsx import export_csv_files, export_xlsx_workbook
-from bracketman.exporters.html import export_printable_html
+from bracketman.exporters.html import export_printable_html, export_printable_roster_html
 from bracketman.grouping.madison import build_tournament_groups
 from bracketman.io.loader import load_wrestlers
 from bracketman.store import load_tournament, regenerate_brackets_by_ids, reoptimize_active_brackets
@@ -129,6 +129,12 @@ def inspect_cmd(source: str, config_path: str | None) -> None:
     default=None,
     help="Override target bracket size across all groups (default in config is 4).",
 )
+@click.option(
+    "--mats",
+    type=int,
+    default=None,
+    help="Number of mats/tables to assign brackets across (default in config is 4).",
+)
 def build_cmd(
     source: str,
     config_path: str | None,
@@ -139,6 +145,7 @@ def build_cmd(
     map_14u_to_15u: bool,
     max_size: int | None,
     target_size: int | None,
+    mats: int | None,
 ) -> None:
     """Read rosters from SOURCE (Google Sheet URL or file) and build groups + brackets."""
     cfg = _load_config(config_path)
@@ -163,6 +170,8 @@ def build_cmd(
             ag_cfg["target_group_size"] = target_size
             for sk_cfg in ag_cfg.get("skills", {}).values():
                 sk_cfg["target_group_size"] = target_size
+    if mats is not None:
+        cfg.mat_count = max(1, int(mats))
 
     wrestlers, skipped, _ = load_wrestlers(source, config=cfg)
     result = build_tournament_groups(
@@ -183,6 +192,11 @@ def build_cmd(
         out_path / "brackets.html",
         tournament_name=cfg.tournament_name,
     )
+    roster_html_path = export_printable_roster_html(
+        result,
+        out_path / "roster_directory.html",
+        tournament_name=cfg.tournament_name,
+    )
 
     click.echo("")
     click.echo("EXPORTED FILES")
@@ -192,6 +206,7 @@ def build_cmd(
     click.echo(f"  Bout Schedule CSV   : {csv_paths['bouts_csv']}")
     click.echo(f"  Multi-Tab Workbook  : {xlsx_path}")
     click.echo(f"  Printable Brackets  : {html_path}")
+    click.echo(f"  Master Roster HTML  : {roster_html_path}")
 
 
 @main.command("init-config")
